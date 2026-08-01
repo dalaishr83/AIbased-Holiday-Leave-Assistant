@@ -1,0 +1,108 @@
+# render.yaml — Holiday Leave Assistant
+# Infrastructure-as-Code for Render.com (render.yaml spec v1)
+#
+# Deploy steps:
+#   1. Push this file to the root of your Git repository.
+#   2. In Render Dashboard → New → Blueprint → connect your repo.
+#   3. Set the secret env vars listed under "sync: false" in the Render dashboard
+#      (they are intentionally not stored in this file).
+#   4. Render will build the Docker image and deploy automatically.
+#
+# Persistent storage:
+#   Two Render Disks are attached — one for Excel data files, one for generated
+#   reports.  The free tier does not include Disks; upgrade to Starter or above.
+#
+# Port routing:
+#   Render injects the PORT env var and routes external HTTPS traffic to it.
+#   FLASK_PORT is set to the value of PORT so Spring Boot binds on the correct
+#   port.  The Dockerfile EXPOSE directive is informational only on Render.
+
+services:
+  - type: web
+    name: holiday-leave-assistant
+    runtime: docker
+
+    # Path to the Dockerfile relative to the repository root.
+    # Adjust if this render.yaml lives at a different level.
+    dockerfilePath: ./holiday-leave-assistant/Dockerfile
+
+    # Docker build context — must contain backend/pom.xml and backend/src/
+    dockerContext: ./holiday-leave-assistant
+
+    # Render's free plan uses shared CPU; upgrade for production workloads.
+    plan: starter
+
+    # Render health-check — must return HTTP 2xx within the timeout window.
+    healthCheckPath: /login
+
+    # ── Environment variables ──────────────────────────────────────────────────
+    envVars:
+
+      # ── Port binding (required) ──────────────────────────────────────────────
+      # Render injects PORT automatically. We forward it to FLASK_PORT so
+      # Spring Boot's server.port=${FLASK_PORT:8085} picks it up.
+      - key: FLASK_PORT
+        fromService:
+          type: web
+          name: holiday-leave-assistant
+          envVarKey: PORT
+
+      # ── Auth (set values in Render dashboard — marked sync:false) ────────────
+      - key: LOGIN_USERNAME
+        value: admin                     # change in dashboard if desired
+
+      - key: LOGIN_PASSWORD_HASH
+        sync: false                      # ← set in Render dashboard (BCrypt hash)
+
+      - key: FLASK_SECRET_KEY
+        generateValue: true              # Render generates a secure random value
+
+      # ── LLM provider ─────────────────────────────────────────────────────────
+      # Set LLM_BASE_URL to a cloud provider — Ollama is not reachable from Render.
+      # Example (Groq):  https://api.groq.com/openai/v1
+      # Example (OpenAI): https://api.openai.com/v1
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1   # replace with your provider URL
+
+      - key: LLM_MODEL
+        value: llama-3.3-70b-versatile           # replace with your model name
+
+      - key: OPENAI_API_KEY
+        sync: false                      # ← set in Render dashboard (your API key)
+
+      - key: LLM_TEMPERATURE
+        value: "0.0"
+
+      - key: LLM_MAX_TOKENS
+        value: "1024"
+
+      # ── IBM Watsonx (leave blank if not using) ───────────────────────────────
+      - key: WATSONX_PROJECT_ID
+        value: ""
+
+      # ── Storage paths — must match subdirs of the disk mountPath above ───────
+      - key: DATA_DIR
+        value: /app-data/data
+
+      - key: REPORT_OUTPUT_DIR
+        value: /app-data/reports
+
+      # ── Behaviour ────────────────────────────────────────────────────────────
+      - key: SYNC_INTERVAL_SECONDS
+        value: "30"
+
+      - key: PERMANENT_SESSION_LIFETIME
+        value: "3600"
+
+      - key: LOG_LEVEL
+        value: INFO
+
+    # ── Persistent disk ───────────────────────────────────────────────────────
+    # Render supports one disk per service.  A single 2 GB disk is mounted at
+    # /app-data; DATA_DIR and REPORT_OUTPUT_DIR are set to subdirectories of it
+    # so both data and reports survive deploys and restarts.
+    # Requires Starter plan or above (free tier has no disk support).
+    disk:
+      name: holiday-storage
+      mountPath: /app-data
+      sizeGB: 2
