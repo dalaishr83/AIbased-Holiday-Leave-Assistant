@@ -484,13 +484,50 @@ html, body {
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
+
+  /* Cap sidebar width so it never covers the full viewport */
+  :root { --sidebar-w: min(88vw, 300px); }
+
+  /* ── Sidebar ── */
   .sidebar { transform: translateX(calc(-1 * var(--sidebar-w))); }
   .sidebar.open { transform: translateX(0); }
+
+  /* ── Main ── */
   .main { margin-left: 0; }
-  .hamburger { display: block; }
+
+  /* ── Overlay ── */
   .overlay.visible { display: block; }
+
+  /* ── Hamburger: visible, dark bg, 44×44 tap target ── */
+  .hamburger {
+    display: flex; align-items: center; justify-content: center;
+    top: 10px; left: 10px;
+    width: 44px; height: 44px;
+    background: var(--sidebar-bg); color: var(--sidebar-text);
+    border-radius: 8px; font-size: 20px;
+  }
+
+  /* ── Topbar: compact single row, clear space for hamburger ── */
+  .topbar        { height: 52px; padding: 0 12px 0 66px; }
+  .topbar-left   { min-width: 0; overflow: hidden; flex: 1; }
+  .topbar-title  { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topbar-subtitle { font-size: 11px; }
+  .btn-new-chat  { padding: 5px 12px; font-size: 12px; }
+  .btn-signout   { padding: 5px 10px; font-size: 12px; }
+
+  /* ── Messages & bubbles ── */
   .messages { padding: 20px 16px 12px; }
-  .message { max-width: 95%; }
+  .message  { max-width: 95%; }
+
+  /* ── Welcome card ── */
+  .welcome-card  { padding: 28px 20px; border-radius: 16px; }
+  .welcome-title { font-size: 19px; }
+  .welcome-sub   { font-size: 13px; }
+
+  /* ── Input area ── */
   .input-wrapper { padding: 10px 14px 6px; }
-  .welcome-card { padding: 32px 24px; }
+  .btn-send      { width: 42px; height: 42px; }
+
+  /* ── Chips: allow wrap so full question text is readable ── */
+  .chip { white-space: normal; }
 }
