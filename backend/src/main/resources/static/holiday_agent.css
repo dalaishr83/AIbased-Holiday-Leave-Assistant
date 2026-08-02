@@ -67,7 +67,7 @@
   --muted:         #6b7a8d;
   --accent:        #2a5bd7;
   --accent-hover:  #1e4bbf;
-  --sidebar-w:     322px;
+  --sidebar-w:     260px;
   --topbar-h:      62px;
 }
 
@@ -283,7 +283,9 @@ html, body {
 /* ── Main area ───────────────────────────────────────────────────────────── */
 .main {
   margin-left: var(--sidebar-w);
-  display: flex; flex-direction: column; height: 100vh;
+  display: flex; flex-direction: column;
+  height: 100vh;       /* fallback for older browsers */
+  height: 100dvh;      /* dynamic viewport: excludes browser chrome on mobile */
 }
 
 /* ── Topbar ─────────────────────────────────────────────────────────────── */
@@ -310,6 +312,9 @@ html, body {
   color: #1a2332; transition: background .12s, border-color .12s;
 }
 .btn-new-chat:hover { background: #f8fafc; border-color: #adb5bd; }
+
+/* Icon span hidden by default on desktop; shown only via mobile override */
+.topbar-btn-icon { display: none; align-items: center; justify-content: center; }
 
 .btn-signout {
   background: none; border: 1px solid #fca5a5; border-radius: 8px;
@@ -431,18 +436,19 @@ html, body {
 }
 
 /* ── Input area ─────────────────────────────────────────────────────────── */
-/* Outer wrapper: grey bg, full width, holds input pill + send button */
+/* Outer wrapper: grey bg, full width, holds the unified input pill */
 .input-wrapper {
-  padding: 14px 24px 8px;
+  padding: 10px 16px 8px;           /* top: 14→10px; sides: 24→16px */
   background: var(--main-bg); flex-shrink: 0;
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center;
 }
-/* The white pill input */
+/* Unified pill: textarea + send button as one component */
 .input-area {
   flex: 1; display: flex; align-items: center;
   background: var(--surface); border: 1px solid #d0d4db;
-  border-radius: 28px; padding: 10px 20px;
+  border-radius: 28px; padding: 6px 6px 6px 18px; /* right: 6px for button; left: 18px */
   transition: border-color .15s, box-shadow .15s;
+  gap: 8px;
 }
 .input-area:focus-within {
   border-color: var(--accent);
@@ -455,16 +461,16 @@ html, body {
   color: var(--text); padding: 0;
 }
 .message-input::placeholder { color: #9aabb8; }
-/* Send button — circle, matching reference */
+/* Send button — circle embedded inside the pill */
 .btn-send {
-  flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%;
+  flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
   background: #2a5bd7; color: #fff; border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: background .15s;
-  box-shadow: 0 2px 8px rgba(42,91,215,.35);
+  /* box-shadow removed: button is contained within the pill border */
 }
 .btn-send:hover { background: #1e4bbf; }
-.btn-send:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
+.btn-send:disabled { background: #94a3b8; cursor: not-allowed; }
 
 /* Disclaimer below input — direct child of .main */
 .input-disclaimer {
@@ -498,25 +504,29 @@ html, body {
   /* ── Overlay ── */
   .overlay.visible { display: block; }
 
-  /* ── Hamburger: visible, dark bg, 44×44 tap target ── */
+  /* ── Hamburger: flush to topbar top-left, vertically centred in topbar band ── */
   .hamburger {
     display: flex; align-items: center; justify-content: center;
-    top: 10px; left: 10px;
-    width: 44px; height: 44px;
+    top: 0; left: 0;
+    width: 52px; height: 52px;
     background: var(--sidebar-bg); color: var(--sidebar-text);
-    border-radius: 8px; font-size: 20px;
+    border-radius: 0; font-size: 20px;
   }
 
   /* ── Topbar: compact single row, clear space for hamburger ── */
-  .topbar        { height: 52px; padding: 0 12px 0 66px; }
+  .topbar        { height: 52px; padding: 0 12px 0 60px; }
   .topbar-left   { min-width: 0; overflow: hidden; flex: 1; }
   .topbar-title  { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .topbar-subtitle { font-size: 11px; }
-  .btn-new-chat  { padding: 5px 12px; font-size: 12px; }
+  /* Icon-only square button on mobile */
+  .btn-new-chat       { padding: 0; width: 34px; height: 34px; font-size: 12px;
+                        display: flex; align-items: center; justify-content: center; }
+  .topbar-btn-icon    { display: flex; }
+  .topbar-btn-text    { display: none; }
   .btn-signout   { padding: 5px 10px; font-size: 12px; }
 
   /* ── Messages & bubbles ── */
-  .messages { padding: 20px 16px 12px; }
+  .messages { padding: 16px 12px 8px; }
   .message  { max-width: 95%; }
 
   /* ── Welcome card ── */
@@ -525,8 +535,15 @@ html, body {
   .welcome-sub   { font-size: 13px; }
 
   /* ── Input area ── */
-  .input-wrapper { padding: 10px 14px 6px; }
-  .btn-send      { width: 42px; height: 42px; }
+  .input-wrapper {
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)) 12px;
+    /* gap removed: button is now inside .input-area */
+  }
+  .input-area { padding: 5px 5px 5px 14px; gap: 6px; }
+  .btn-send { width: 34px; height: 34px; }
+  .input-disclaimer {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
 
   /* ── Chips: allow wrap so full question text is readable ── */
   .chip { white-space: normal; }

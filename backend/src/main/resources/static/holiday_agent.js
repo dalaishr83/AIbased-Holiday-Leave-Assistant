@@ -479,3 +479,18 @@
     statusDot.classList.add("online");
 
 })();
+
+/* ── Mobile topbar adaptation — New Chat button ─────────────────────────── */
+(function () {
+    var newChatBtnEl = document.getElementById('newChatBtn');
+    if (!newChatBtnEl) return;
+    var textEl = newChatBtnEl.querySelector('.topbar-btn-text');
+    var iconEl = newChatBtnEl.querySelector('.topbar-btn-icon');
+    function adaptTopbar() {
+        var isMobile = window.innerWidth <= 768;
+        if (textEl) textEl.style.display = isMobile ? 'none' : '';
+        if (iconEl) iconEl.style.display = isMobile ? '' : 'none';
+    }
+    adaptTopbar();
+    window.addEventListener('resize', adaptTopbar);
+})();
