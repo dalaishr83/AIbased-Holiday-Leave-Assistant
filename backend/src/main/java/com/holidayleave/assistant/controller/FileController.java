@@ -41,7 +41,14 @@ public class FileController {
                 Files.copy(in, tmpPath, StandardCopyOption.REPLACE_EXISTING);
             }
 
-            Integer year = reader.detectYear(tmpPath.toString());
+            // Single workbook load on the temp file: gives us both records and the year.
+            // This replaces the previous detectYear() + load() double-open pattern (F-6).
+            List<LeaveRecord> records = reader.load(tmpPath.toString());
+            Integer year = records.isEmpty() ? null : records.get(0).year();
+            if (year == null) {
+                // Filename fallback for edge case where file has no date rows
+                year = reader.detectYear(tmpPath.toString());
+            }
             if (year == null) {
                 Files.deleteIfExists(tmpPath);
                 return ResponseEntity.unprocessableEntity().body(err("Could not detect the year from the uploaded file."));
@@ -55,7 +62,11 @@ public class FileController {
             Files.move(tmpPath, uploadPath,  StandardCopyOption.REPLACE_EXISTING);
             Files.copy(masterPath, workingPath, StandardCopyOption.REPLACE_EXISTING);
 
-            List<LeaveRecord> records = reader.load(masterPath.toString());
+            // Evict the master path from cache — the file was just replaced on disk.
+            // The records variable already holds the parsed content from the temp file
+            // (identical bytes to masterPath), so no second load is needed.
+            reader.evict(masterPath.toAbsolutePath().toString());
+
             List<String> employees = reader.getEmployeeNames(records);
 
             appState.setLoadedFiles(Collections.singletonList(masterPath.toString()));

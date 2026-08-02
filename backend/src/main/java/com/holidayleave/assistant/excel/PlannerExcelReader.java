@@ -13,6 +13,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,9 +47,75 @@ public class PlannerExcelReader {
 
     private static final Pattern YEAR_PATTERN = Pattern.compile("\\b(20\\d{2})\\b");
 
+    // ── Record cache ──────────────────────────────────────────────────────────
+
+    /**
+     * Immutable cache entry pairing the parsed records with the file's
+     * lastModified timestamp at parse time.  Both fields are set once on
+     * construction and never mutated, so the object is safely shareable
+     * across threads without additional synchronisation.
+     */
+    private static final class CacheEntry {
+        final List<LeaveRecord> records;   // Collections.unmodifiableList — callers cannot mutate
+        final long timestamp;              // File.lastModified() at parse time
+
+        CacheEntry(List<LeaveRecord> records, long timestamp) {
+            this.records   = Collections.unmodifiableList(new ArrayList<>(records));
+            this.timestamp = timestamp;
+        }
+    }
+
+    /** Keyed by absolute file path (master copy only — working copy is never cached). */
+    private final ConcurrentHashMap<String, CacheEntry> cache = new ConcurrentHashMap<>();
+
     // ── Public API ────────────────────────────────────────────────────────────
 
+    /**
+     * Returns the parsed leave records for the given file.
+     * Results are cached by (path, lastModified).  Callers receive an
+     * unmodifiable view; use {@code new ArrayList<>(records)} if a mutable
+     * copy is needed.
+     *
+     * <p>Cache is invalidated by:
+     * <ol>
+     *   <li>An explicit {@link #evict(String)} call (eager eviction after a
+     *       confirmed write or sync).</li>
+     *   <li>The file's {@code lastModified} timestamp changing on disk
+     *       (self-invalidating timestamp check — belt-and-suspenders).</li>
+     * </ol>
+     */
     public List<LeaveRecord> load(String filePath) throws IOException {
+        File f = new File(filePath);
+        long currentMod = f.lastModified();
+        CacheEntry entry = cache.get(filePath);
+        if (entry != null && entry.timestamp == currentMod) {
+            return entry.records;   // cache hit — unmodifiable list
+        }
+        List<LeaveRecord> result = loadUncached(filePath);
+        CacheEntry newEntry = new CacheEntry(result, currentMod);
+        cache.put(filePath, newEntry);
+        return newEntry.records;
+    }
+
+    /**
+     * Evicts the cache entry for the given absolute file path.
+     * Must be called with the <em>master</em> file path, not the working copy path.
+     *
+     * <p>Called from:
+     * <ul>
+     *   <li>{@code VacationController} and {@code ChatController} immediately after a
+     *       confirmed write to the working copy (eager eviction).</li>
+     *   <li>{@code SyncService} immediately after a successful atomic rename of the
+     *       master file (confirmed eviction).</li>
+     *   <li>{@code FileController.upload()} after the master file is replaced.</li>
+     * </ul>
+     */
+    public void evict(String filePath) {
+        cache.remove(filePath);
+        log.debug("Cache evicted for: {}", filePath);
+    }
+
+    private List<LeaveRecord> loadUncached(String filePath) throws IOException {
         try (FileInputStream fis = new FileInputStream(filePath);
              XSSFWorkbook workbook = new XSSFWorkbook(fis)) {
 

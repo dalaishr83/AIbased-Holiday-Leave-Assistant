@@ -23,6 +23,10 @@ services:
     # Paths.get(dir).toAbsolutePath() in AppState resolves correctly
     # regardless of the JVM working directory inside the container.
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 640m
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8080/login || exit 1"]
       interval: 30s

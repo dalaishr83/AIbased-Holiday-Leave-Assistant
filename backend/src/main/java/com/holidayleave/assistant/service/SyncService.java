@@ -1,6 +1,7 @@
 package com.holidayleave.assistant.service;
 
 import com.holidayleave.assistant.config.AppProperties;
+import com.holidayleave.assistant.excel.PlannerExcelReader;
 import com.holidayleave.assistant.excel.WorkingExcelWriter;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -31,6 +32,7 @@ public class SyncService {
     @Autowired private AppProperties props;
     @Autowired private AppState appState;
     @Autowired private WorkingExcelWriter writer;
+    @Autowired private PlannerExcelReader reader;
 
     private Thread syncThread;
     private volatile boolean running = false;
@@ -138,6 +140,10 @@ public class SyncService {
                         }
                         synced.add(workingFile.getName());
                         log.info("Synced {} -> {}", workingFile.getName(), masterFile.getPath());
+                        // Confirmed eviction: master file was atomically replaced.
+                        // Belt-and-suspenders alongside the eager eviction fired by the
+                        // controller immediately after the working copy was written.
+                        reader.evict(masterFile.getAbsolutePath());
                         if (reloadCallback != null) reloadCallback.run();
                     } finally { lock.unlock(); }
                 }

@@ -111,6 +111,9 @@ public class ChatController {
             String workingPath = getWorkingPath(record.year());
             ensureWorkingCopy(workingPath, record.year());
             int cells = writer.addVacation(workingPath, record, vtype);
+            // Eager cache eviction — master not yet updated by sync-daemon but evicting
+            // now ensures the next read re-parses from disk (consistent with master).
+            reader.evict(getMasterPath(record.year()));
             auditService.log("vacation_added", "admin", record.employeeName(),
                 "Added " + record.days() + "d [" + record.leaveType() + "] via chat", "success", "chat");
             syncService.triggerSync();
@@ -132,6 +135,8 @@ public class ChatController {
             ensureWorkingCopy(workingPath, pending.getStartDate().getYear());
             int cleared = writer.deleteVacation(workingPath, pending.getEmployeeName(),
                     pending.getStartDate(), pending.getEndDate());
+            // Eager cache eviction after confirmed delete.
+            reader.evict(getMasterPath(pending.getStartDate().getYear()));
             auditService.log("vacation_deleted", "admin", pending.getEmployeeName(),
                 "Deleted vacation via chat", "success", "chat");
             syncService.triggerSync();
@@ -153,6 +158,10 @@ public class ChatController {
 
     private String getWorkingPath(int year) {
         return appState.getWorkingDir() + "/eIndkomst vacation " + year + ".xlsx";
+    }
+
+    private String getMasterPath(int year) {
+        return appState.getDataDir() + "/eIndkomst vacation " + year + ".xlsx";
     }
 
     private void ensureWorkingCopy(String workingPath, int year) throws IOException {

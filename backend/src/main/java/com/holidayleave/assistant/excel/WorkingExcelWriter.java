@@ -42,7 +42,10 @@ public class WorkingExcelWriter {
         int year = record.year();
         ReentrantLock lock = getLock(year);
         lock.lock();
-        try (XSSFWorkbook workbook = openWorkbook(workingFilePath)) {
+        // FileInputStream and XSSFWorkbook are both declared in the same try-with-resources
+        // so the workbook is guaranteed to be closed even if the constructor throws.
+        try (FileInputStream fis = new FileInputStream(workingFilePath);
+             XSSFWorkbook workbook = new XSSFWorkbook(fis)) {
             Sheet plannerSheet = findPlannerSheet(workbook);
             if (plannerSheet == null) throw new IOException("Could not find planner sheet");
 
@@ -66,9 +69,10 @@ public class WorkingExcelWriter {
                 }
             }
 
-            // Write phase
+            // Write phase — create one style per call, not one per cell (F-4 fix).
             int written = 0;
             XSSFColor color = parseArgb(type.color());
+            XSSFCellStyle fillStyle = createFillStyle(workbook, color);
             for (LocalDate d = record.startDate(); !d.isAfter(record.endDate()); d = d.plusDays(1)) {
                 if (d.getDayOfWeek().getValue() > 5) continue;
                 Integer col = dateToCol.get(d);
@@ -78,7 +82,7 @@ public class WorkingExcelWriter {
                 Cell cell = row.getCell(col);
                 if (cell == null) cell = row.createCell(col);
                 cell.setCellValue(type.code());
-                applyFill(workbook, cell, color);
+                cell.setCellStyle(fillStyle);
                 written++;
             }
 
@@ -98,7 +102,8 @@ public class WorkingExcelWriter {
         int year = startDate.getYear();
         ReentrantLock lock = getLock(year);
         lock.lock();
-        try (XSSFWorkbook workbook = openWorkbook(workingFilePath)) {
+        try (FileInputStream fis = new FileInputStream(workingFilePath);
+             XSSFWorkbook workbook = new XSSFWorkbook(fis)) {
             Sheet plannerSheet = findPlannerSheet(workbook);
             if (plannerSheet == null) throw new IOException("Could not find planner sheet");
 
@@ -106,6 +111,8 @@ public class WorkingExcelWriter {
             int employeeRow = findEmployeeRow(plannerSheet, employeeName);
             if (employeeRow < 0) throw new IOException("Employee '" + employeeName + "' not found in Excel");
 
+            // Create blank style once per call, not once per cell (F-4 fix).
+            XSSFCellStyle blankStyle = createBlankStyle(workbook);
             int cleared = 0;
             for (LocalDate d = startDate; !d.isAfter(endDate); d = d.plusDays(1)) {
                 if (d.getDayOfWeek().getValue() > 5) continue;
@@ -119,7 +126,7 @@ public class WorkingExcelWriter {
                 if (!val.isEmpty()) {
                     cell.setCellValue("");
                     cell.setCellType(CellType.BLANK);
-                    clearFill(workbook, cell);
+                    cell.setCellStyle(blankStyle);
                     cleared++;
                 }
             }
@@ -143,12 +150,6 @@ public class WorkingExcelWriter {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
-
-    private XSSFWorkbook openWorkbook(String path) throws IOException {
-        try (FileInputStream fis = new FileInputStream(path)) {
-            return new XSSFWorkbook(fis);
-        }
-    }
 
     private Sheet findPlannerSheet(XSSFWorkbook workbook) {
         // Pick the sheet with the most columns (likely the planner)
@@ -252,19 +253,18 @@ public class WorkingExcelWriter {
         return -1;
     }
 
-    private void applyFill(XSSFWorkbook wb, Cell cell, XSSFColor color) {
+    private XSSFCellStyle createFillStyle(XSSFWorkbook wb, XSSFColor color) {
         XSSFCellStyle style = wb.createCellStyle();
-        XSSFColor fg = color;
-        style.setFillForegroundColor(fg);
-        style.setFillBackgroundColor(fg);
+        style.setFillForegroundColor(color);
+        style.setFillBackgroundColor(color);
         style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-        cell.setCellStyle(style);
+        return style;
     }
 
-    private void clearFill(XSSFWorkbook wb, Cell cell) {
+    private XSSFCellStyle createBlankStyle(XSSFWorkbook wb) {
         XSSFCellStyle style = wb.createCellStyle();
         style.setFillPattern(FillPatternType.NO_FILL);
-        cell.setCellStyle(style);
+        return style;
     }
 
     private XSSFColor parseArgb(String argb) {

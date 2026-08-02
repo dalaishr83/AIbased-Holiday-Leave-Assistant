@@ -12,4 +12,7 @@ COPY --from=builder /build/target/*.jar app.jar
 RUN mkdir -p data/uploads data/working reports
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", \
+  "-Xms128m", "-Xmx512m", \
+  "-XX:+ExitOnOutOfMemoryError", \
+  "-jar", "app.jar"]

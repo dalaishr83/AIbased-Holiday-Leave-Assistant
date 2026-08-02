@@ -70,6 +70,10 @@ public class VacationController {
             String workingPath = getWorkingPath(record.year());
             ensureWorkingCopy(workingPath, record.year());
             writer.addVacation(workingPath, record, vtype);
+            // Eager cache eviction: invalidate master so the next read re-parses from disk.
+            // Evict before triggerSync() so the sync-daemon's confirmed eviction (Step 4)
+            // is a belt-and-suspenders fallback, not the primary invalidation.
+            reader.evict(getMasterPath(record.year()));
 
             auditService.log("vacation_added", "admin", resolved,
                 "Added " + days + "d via API", "success", "api");
@@ -131,6 +135,8 @@ public class VacationController {
             String workingPath = getWorkingPath(start.getYear());
             ensureWorkingCopy(workingPath, start.getYear());
             int cleared = writer.deleteVacation(workingPath, resolved, start, end);
+            // Eager cache eviction after confirmed delete.
+            reader.evict(getMasterPath(start.getYear()));
 
             auditService.log("vacation_deleted", "admin", resolved, "Deleted vacation via API", "success", "api");
             syncService.triggerSync();
@@ -201,6 +207,10 @@ public class VacationController {
 
     private String getWorkingPath(int year) {
         return appState.getWorkingDir() + "/eIndkomst vacation " + year + ".xlsx";
+    }
+
+    private String getMasterPath(int year) {
+        return appState.getDataDir() + "/eIndkomst vacation " + year + ".xlsx";
     }
 
     private void ensureWorkingCopy(String workingPath, int year) throws IOException {
