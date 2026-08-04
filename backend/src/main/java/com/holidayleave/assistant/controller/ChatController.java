@@ -73,11 +73,19 @@ public class ChatController {
             }
             if (agent.isReportIntent(message)) {
                 String empName = agent.resolveEmployeeName(message, allRecords);
+                // Pronoun / contextual reference ("for her", "for him") — fall back to history
+                if (empName == null) {
+                    empName = agent.resolveEmployeeNameFromHistory(
+                            appState.getConversationHistory(), allRecords);
+                }
                 if (empName != null && !allRecords.isEmpty()) {
                     int year = allRecords.stream().mapToInt(LeaveRecord::year).max().orElse(java.time.LocalDate.now().getYear());
                     String path = reportGenerator.generate(allRecords, empName, year);
                     return ResponseEntity.ok(reply("Report generated.\nreport-file: " + path, "report"));
                 }
+                // Name still unresolved — ask rather than falling through to the LLM
+                return ResponseEntity.ok(reply(
+                        "Which employee should I generate the report for? Please provide their name.", "text"));
             }
             String replyText = agent.ask(message, allRecords);
             return ResponseEntity.ok(reply(replyText, "text"));

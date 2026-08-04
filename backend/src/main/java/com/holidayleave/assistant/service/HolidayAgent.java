@@ -70,6 +70,13 @@ public class HolidayAgent {
         int year = extractYear(question, allRecords);
         boolean allEmployees = isAllEmployeesQuery(lower);
         String employeeName = allEmployees ? null : resolveEmployeeName(question, allRecords);
+        // Pronoun reference ("she", "he", "her", "him") — primary pass returns null.
+        // Fall back to history before choosing the context builder so the LLM receives
+        // real leave data instead of a sparse Shape C context.
+        if (!allEmployees && employeeName == null) {
+            employeeName = resolveEmployeeNameFromHistory(
+                    appState.getConversationHistory(), allRecords);
+        }
 
         String context;
         if (allEmployees) {
@@ -107,6 +114,23 @@ public class HolidayAgent {
         String lower = message.toLowerCase();
         for (String kw : ALL_EMPLOYEES_KEYWORDS) { if (lower.contains(kw)) return true; }
         return false;
+    }
+
+    /**
+     * Scans conversation history in reverse order and returns the first employee
+     * name that can be resolved from any prior message (user or assistant).
+     * Delegates to the existing resolveEmployeeName logic so matching rules stay consistent.
+     */
+    public String resolveEmployeeNameFromHistory(List<Map<String, String>> history,
+                                                  List<LeaveRecord> allRecords) {
+        if (history == null || history.isEmpty()) return null;
+        for (int i = history.size() - 1; i >= 0; i--) {
+            String content = history.get(i).get("content");
+            if (content == null || content.isEmpty()) continue;
+            String found = resolveEmployeeName(content, allRecords);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     public String resolveEmployeeName(String question, List<LeaveRecord> allRecords) {
@@ -171,8 +195,21 @@ public class HolidayAgent {
             byType = filteredByType;
         }
 
+        // When a specific month was requested, only include records that overlap that month.
+        // This keeps leave_records consistent with the already-filtered by_month/by_type.
+        List<LeaveRecord> recordsForContext = empRecords;
+        if (requestedMonth != null) {
+            final int rm = requestedMonth;
+            recordsForContext = new ArrayList<>();
+            for (LeaveRecord r : empRecords) {
+                if (r.startDate().getMonthValue() == rm || r.endDate().getMonthValue() == rm) {
+                    recordsForContext.add(r);
+                }
+            }
+        }
+
         List<Map<String, Object>> recordMaps = new ArrayList<>();
-        for (LeaveRecord r : empRecords) {
+        for (LeaveRecord r : recordsForContext) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("start_date",  r.startDate().toString());
             m.put("end_date",    r.endDate().toString());
