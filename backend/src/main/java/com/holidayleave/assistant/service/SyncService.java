@@ -33,6 +33,7 @@ public class SyncService {
     @Autowired private AppState appState;
     @Autowired private WorkingExcelWriter writer;
     @Autowired private PlannerExcelReader reader;
+    @Autowired private BoxSyncService boxSyncService;
 
     private Thread syncThread;
     private volatile boolean running = false;
@@ -145,6 +146,9 @@ public class SyncService {
                         // controller immediately after the working copy was written.
                         reader.evict(masterFile.getAbsolutePath());
                         if (reloadCallback != null) reloadCallback.run();
+                        if (boxSyncService.isEnabled()) {
+                            boxSyncService.submitUpload(masterFile);
+                        }
                     } finally { lock.unlock(); }
                 }
             } catch (Exception e) {

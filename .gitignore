@@ -1,6 +1,5 @@
 # ── Secrets ───────────────────────────────────────────────────────────────────
 .env
-.env.example
 
 # ── Runtime data (uploaded files and generated reports) ───────────────────────
 data/

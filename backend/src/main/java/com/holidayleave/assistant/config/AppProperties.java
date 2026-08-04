@@ -18,6 +18,7 @@ public class AppProperties {
     private String loginPasswordHash = "";
 
     private Llm llm = new Llm();
+    private Box box = new Box();
 
     public static class Llm {
         private String apiKey = "";
@@ -55,4 +56,37 @@ public class AppProperties {
     public void setLoginPasswordHash(String loginPasswordHash) { this.loginPasswordHash = loginPasswordHash; }
     public Llm getLlm() { return llm; }
     public void setLlm(Llm llm) { this.llm = llm; }
+    public Box getBox() { return box; }
+    public void setBox(Box box) { this.box = box; }
+
+    public static class Box {
+        private boolean enabled = false;
+        private String clientId = "";
+        private String clientSecret = "";
+        private String enterpriseId = "";
+        private String folderId = "";
+        private String jwtPrivateKey = "";
+        private String jwtPrivateKeyPassphrase = "";
+        private String jwtPublicKeyId = "";
+        private int retryBackoffSeconds = 60;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getClientId() { return clientId; }
+        public void setClientId(String clientId) { this.clientId = clientId; }
+        public String getClientSecret() { return clientSecret; }
+        public void setClientSecret(String clientSecret) { this.clientSecret = clientSecret; }
+        public String getEnterpriseId() { return enterpriseId; }
+        public void setEnterpriseId(String enterpriseId) { this.enterpriseId = enterpriseId; }
+        public String getFolderId() { return folderId; }
+        public void setFolderId(String folderId) { this.folderId = folderId; }
+        public String getJwtPrivateKey() { return jwtPrivateKey; }
+        public void setJwtPrivateKey(String jwtPrivateKey) { this.jwtPrivateKey = jwtPrivateKey; }
+        public String getJwtPrivateKeyPassphrase() { return jwtPrivateKeyPassphrase; }
+        public void setJwtPrivateKeyPassphrase(String v) { this.jwtPrivateKeyPassphrase = v; }
+        public String getJwtPublicKeyId() { return jwtPublicKeyId; }
+        public void setJwtPublicKeyId(String jwtPublicKeyId) { this.jwtPublicKeyId = jwtPublicKeyId; }
+        public int getRetryBackoffSeconds() { return retryBackoffSeconds; }
+        public void setRetryBackoffSeconds(int retryBackoffSeconds) { this.retryBackoffSeconds = retryBackoffSeconds; }
+    }
 }
