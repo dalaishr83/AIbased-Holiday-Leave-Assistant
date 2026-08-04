@@ -14,11 +14,12 @@ Ask questions about employee leave data in plain English, add or delete vacation
 4. [Docker](#docker)
 5. [Podman](#podman)
 6. [Render.com](#rendercom)
-7. [Environment Variables](#environment-variables)
-7. [LLM Provider Configuration](#llm-provider-configuration)
-8. [API Reference](#api-reference)
-9. [Key Design Notes](#key-design-notes)
-10. [Troubleshooting](#troubleshooting)
+7. [IBM Cloud Code Engine](#ibm-cloud-code-engine)
+8. [Environment Variables](#environment-variables)
+9. [LLM Provider Configuration](#llm-provider-configuration)
+10. [API Reference](#api-reference)
+11. [Key Design Notes](#key-design-notes)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -310,6 +311,152 @@ Key fields:
 | `plan` | `starter` | Minimum plan that supports persistent disks |
 | `disk[0].mountPath` | `/data` | Must match `DATA_DIR` env var |
 | `disk[1].mountPath` | `/reports` | Must match `REPORT_OUTPUT_DIR` env var |
+
+---
+
+## IBM Cloud Code Engine
+
+Deploy to [IBM Cloud Code Engine](https://cloud.ibm.com/codeengine) using the included `ibm-code-engine.yaml` manifest.
+This configuration uses **ephemeral `/tmp` storage** — suitable for demos and development.
+Uploaded `.xlsx` files and generated HTML reports are lost when the container restarts; re-upload your data file after each restart.
+
+### Prerequisites
+
+- An [IBM Cloud](https://cloud.ibm.com) account (Pay-As-You-Go or Subscription)
+- IBM Cloud CLI with Code Engine and Container Registry plug-ins
+- A cloud LLM provider — Ollama is not reachable from Code Engine. Use [IBM Watsonx](https://www.ibm.com/watsonx), [Groq](https://console.groq.com), [OpenAI](https://platform.openai.com), or [OpenRouter](https://openrouter.ai)
+
+### 1. Install CLI and log in
+
+```bash
+curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+ibmcloud plugin install code-engine container-registry
+ibmcloud login --sso
+ibmcloud target -r us-south -g Default
+```
+
+### 2. Create a Code Engine project
+
+```bash
+ibmcloud ce project create --name holiday-leave-assistant
+ibmcloud ce project select  --name holiday-leave-assistant
+```
+
+### 3. Build and push the image to ICR
+
+```bash
+ibmcloud cr login
+ibmcloud cr namespace-add <YOUR_NAMESPACE>
+
+docker build -t icr.io/<YOUR_NAMESPACE>/holiday-leave-assistant:latest .
+docker push     icr.io/<YOUR_NAMESPACE>/holiday-leave-assistant:latest
+```
+
+### 4. Create the registry pull-secret
+
+```bash
+ibmcloud ce registry create \
+  --name icr-secret \
+  --server icr.io \
+  --username iamapikey \
+  --password <IBM_CLOUD_API_KEY>
+```
+
+### 5. Create the Secret (sensitive values)
+
+```bash
+ibmcloud ce secret create --name holiday-secrets \
+  --from-literal LOGIN_PASSWORD_HASH="<bcrypt-hash>" \
+  --from-literal FLASK_SECRET_KEY="$(openssl rand -hex 32)" \
+  --from-literal OPENAI_API_KEY="<your-llm-api-key>"
+```
+
+Generate a BCrypt hash:
+
+```bash
+python -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt()).decode())"
+```
+
+### 6. Create the ConfigMap (non-sensitive values)
+
+```bash
+ibmcloud ce configmap create --name holiday-config \
+  --from-literal FLASK_PORT="8080" \
+  --from-literal LLM_BASE_URL="https://api.groq.com/openai/v1" \
+  --from-literal LLM_MODEL="llama-3.3-70b-versatile" \
+  --from-literal LLM_TEMPERATURE="0.0" \
+  --from-literal LLM_MAX_TOKENS="1024" \
+  --from-literal LOGIN_USERNAME="admin" \
+  --from-literal SYNC_INTERVAL_SECONDS="30" \
+  --from-literal PERMANENT_SESSION_LIFETIME="3600" \
+  --from-literal LOG_LEVEL="INFO" \
+  --from-literal WATSONX_PROJECT_ID=""
+```
+
+For IBM Watsonx replace the `LLM_*` lines with:
+
+```
+--from-literal LLM_BASE_URL="https://us-south.ml.cloud.ibm.com/ml/v1"
+--from-literal LLM_MODEL="meta-llama/llama-3-3-70b-instruct"
+--from-literal WATSONX_PROJECT_ID="<your-watsonx-project-id>"
+```
+
+### 7. Deploy with the manifest
+
+```bash
+ibmcloud ce application create --file ibm-code-engine.yaml
+```
+
+To update an already-deployed application:
+
+```bash
+ibmcloud ce application update --file ibm-code-engine.yaml
+```
+
+### 8. Get the public URL
+
+```bash
+ibmcloud ce application get --name holiday-leave-assistant
+```
+
+Code Engine provisions a public HTTPS URL automatically, e.g.:
+`https://holiday-leave-assistant.<hash>.us-south.codeengine.appdomain.cloud`
+
+### CI/CD — GitHub Actions
+
+The included `.github/workflows/deploy-code-engine.yml` automates the full build-push-deploy cycle on every push to `main`.
+
+Configure these in your GitHub repository **Settings → Secrets and variables**:
+
+| Type | Name | Value |
+|---|---|---|
+| Secret | `IBM_CLOUD_API_KEY` | IBM Cloud API key with Code Engine Developer + ICR Writer roles |
+| Variable | `IBM_CLOUD_REGION` | e.g. `us-south` |
+| Variable | `ICR_NAMESPACE` | Your ICR namespace |
+| Variable | `CE_PROJECT_NAME` | `holiday-leave-assistant` |
+| Variable | `CE_APP_NAME` | `holiday-leave-assistant` |
+
+### Ephemeral storage note
+
+`DATA_DIR` is set to `/tmp/data` and `REPORT_OUTPUT_DIR` to `/tmp/reports`.
+Both directories are created automatically when the application first writes to them.
+All data is lost on container restart — this configuration is intended for **demos and development** only.
+For production use, migrate to IBM Cloud Object Storage volume mounts (Option A in the deployment plan).
+
+### ibm-code-engine.yaml reference
+
+Key fields in `ibm-code-engine.yaml`:
+
+| Field | Value | Notes |
+|---|---|---|
+| `containerPort` | `8080` | Must match `FLASK_PORT` |
+| `min-scale` | `1` | Keeps one instance warm; avoids cold starts and preserves in-memory session |
+| `max-scale` | `3` | Horizontal headroom for availability |
+| `resources.limits.cpu` | `1` | Adequate for Spring Boot steady-state |
+| `resources.limits.memory` | `2G` | Covers JVM heap (`-Xmx512m`) + POI + overhead |
+| `DATA_DIR` | `/tmp/data` | Ephemeral — lost on restart |
+| `REPORT_OUTPUT_DIR` | `/tmp/reports` | Ephemeral — lost on restart |
+| `readinessProbe.path` | `/login` | HTTP 200 once Spring Boot is fully started |
 
 ---
 
