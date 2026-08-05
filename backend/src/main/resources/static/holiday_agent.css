@@ -479,6 +479,24 @@ html, body {
   background: var(--main-bg); flex-shrink: 0;
 }
 
+
+/* ── Admin sidebar links ─────────────────────────────────────────────────── */
+.sidebar-admin-link {
+  display: flex; align-items: center; padding: 7px 16px;
+  color: var(--sidebar-text); text-decoration: none; font-size: .82rem;
+  border-radius: 5px; margin: 0 8px 2px 8px; transition: background .15s;
+}
+.sidebar-admin-link:hover { background: var(--sidebar-hover); }
+
+/* ── File delete button (admin file list) ───────────────────────────────── */
+.file-delete-btn {
+  margin-left: auto; flex-shrink: 0;
+  background: none; border: none; cursor: pointer;
+  color: #e57373; padding: 2px 4px; border-radius: 4px; line-height: 1;
+}
+.file-delete-btn:hover { background: rgba(229,115,115,.15); }
+
+
 /* ── Hamburger (mobile only) ─────────────────────────────────────────────── */
 .hamburger {
   display: none; position: fixed; top: 12px; left: 14px; z-index: 200;

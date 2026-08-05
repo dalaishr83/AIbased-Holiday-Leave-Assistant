@@ -5,6 +5,7 @@ import com.holidayleave.assistant.excel.WorkingExcelWriter;
 import com.holidayleave.assistant.model.LeaveRecord;
 import com.holidayleave.assistant.model.VacationType;
 import com.holidayleave.assistant.service.*;
+import com.holidayleave.assistant.service.RestrictedVacationTypeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,7 @@ public class VacationController {
     @Autowired private PlannerExcelReader reader;
     @Autowired private WorkingExcelWriter writer;
     @Autowired private VacationTypeService typeService;
+    @Autowired private RestrictedVacationTypeService restrictedTypeService;
     @Autowired private AuditService auditService;
     @Autowired private SyncService syncService;
 
@@ -58,6 +60,12 @@ public class VacationController {
                 List<String> valid = new ArrayList<>();
                 for (VacationType t : typeService.findAll()) valid.add(t.label());
                 return ResponseEntity.badRequest().body(err("Invalid leave_type '" + leaveType + "'. Valid types: " + String.join(", ", valid)));
+            }
+            // Server-side restricted-type enforcement
+            if (restrictedTypeService.isRestricted(vtype.code())) {
+                return ResponseEntity.status(403).body(err(
+                    "The vacation type " + vtype.label() + " is currently disabled by the administrator " +
+                    "and cannot be requested at this time."));
             }
 
             LocalDate start, end;

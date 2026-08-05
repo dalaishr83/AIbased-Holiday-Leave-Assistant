@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -17,6 +18,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -55,5 +59,36 @@ public class AuditService {
         } finally {
             lock.unlock();
         }
+    }
+
+    /**
+     * Read all audit log entries in reverse-chronological order (most recent first).
+     * Returns an empty list if the log file does not yet exist.
+     */
+    public List<AuditLogEntry> readAll() {
+        if (!Files.exists(auditFilePath)) {
+            return Collections.emptyList();
+        }
+        List<AuditLogEntry> entries = new ArrayList<>();
+        lock.lock();
+        try (BufferedReader reader = Files.newBufferedReader(auditFilePath)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (!line.isEmpty()) {
+                    try {
+                        entries.add(mapper.readValue(line, AuditLogEntry.class));
+                    } catch (Exception e) {
+                        log.warn("Skipping malformed audit log line: {}", e.getMessage());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            log.error("Audit log read failed: {}", e.getMessage());
+        } finally {
+            lock.unlock();
+        }
+        Collections.reverse(entries);
+        return entries;
     }
 }

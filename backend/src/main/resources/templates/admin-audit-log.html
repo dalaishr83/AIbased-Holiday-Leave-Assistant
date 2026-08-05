@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Audit Log — Holiday Leave Assistant</title>
+    <link rel="stylesheet" th:href="@{/static/holiday_agent.css}">
+    <style>
+        .audit-page { max-width: 960px; margin: 0 auto; padding: 32px 20px; }
+        .audit-page h1 { font-size: 1.4rem; margin-bottom: 8px; }
+        .audit-page .back-link { display:inline-flex; align-items:center; gap:6px; color:var(--accent); text-decoration:none; font-size:.85rem; margin-bottom:20px; }
+        .audit-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+        .audit-card h2 { font-size: 1rem; margin: 0 0 14px 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; display:flex; align-items:center; gap:8px; }
+        .audit-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+        .audit-toolbar input[type=text] {
+            flex: 1; min-width: 180px; padding: 6px 10px;
+            border: 1px solid var(--border); border-radius: 6px;
+            background: var(--bg); color: var(--text); font-size:.85rem;
+        }
+        .audit-toolbar select {
+            padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+            background: var(--bg); color: var(--text); font-size:.85rem;
+        }
+        .audit-toolbar .btn-refresh {
+            padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
+            background: var(--bg); color: var(--text); cursor: pointer; font-size:.85rem;
+            display:inline-flex; align-items:center; gap:5px;
+        }
+        .audit-toolbar .btn-refresh:hover { background: var(--sidebar-hover); }
+        table { width:100%; border-collapse:collapse; font-size:.82rem; }
+        thead th { text-align:left; padding:8px 10px; background:var(--bg); color:var(--muted); font-weight:600; border-bottom:2px solid var(--border); white-space:nowrap; }
+        tbody td { padding:7px 10px; border-bottom:1px solid var(--border); color:var(--text); word-break:break-word; }
+        tbody tr:last-child td { border-bottom:none; }
+        tbody tr:hover { background: var(--sidebar-hover); }
+        .badge {
+            display:inline-block; padding:2px 8px; border-radius:10px; font-size:.75rem; font-weight:600; white-space:nowrap;
+        }
+        .badge-success { background:#d1fae5; color:#065f46; }
+        .badge-error   { background:#fee2e2; color:#991b1b; }
+        .badge-warning { background:#fef3c7; color:#92400e; }
+        .badge-info    { background:#dbeafe; color:#1e40af; }
+        .source-badge  { display:inline-block; padding:2px 7px; border-radius:8px; font-size:.73rem; background:var(--border); color:var(--muted); }
+        .empty-msg { color:var(--muted); font-size:.85rem; padding:20px 0; text-align:center; }
+        .count-label { font-size:.8rem; color:var(--muted); margin-left:auto; }
+        .ts-cell { white-space:nowrap; color:var(--muted); font-size:.78rem; }
+        #loadingMsg { color:var(--muted); font-size:.85rem; padding:20px 0; text-align:center; display:none; }
+    </style>
+</head>
+<body style="background:var(--main-bg);overflow:auto;">
+
+<div class="audit-page">
+    <a href="/" class="back-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to Dashboard
+    </a>
+    <h1>Audit Log</h1>
+
+    <div class="audit-card">
+        <h2>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="8" y1="13" x2="16" y2="13"/>
+                <line x1="8" y1="17" x2="16" y2="17"/>
+                <polyline points="10 9 9 9 8 9"/>
+            </svg>
+            System Activity
+            <span class="count-label" id="countLabel"></span>
+        </h2>
+
+        <div class="audit-toolbar">
+            <input type="text" id="filterInput" placeholder="Filter by user, employee, event, details…">
+            <select id="statusFilter">
+                <option value="">All statuses</option>
+                <option value="success">Success</option>
+                <option value="error">Error</option>
+                <option value="warning">Warning</option>
+            </select>
+            <select id="sourceFilter">
+                <option value="">All sources</option>
+                <option value="api">API</option>
+                <option value="chat">Chat</option>
+                <option value="system">System</option>
+            </select>
+            <button class="btn-refresh" id="refreshBtn">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Refresh
+            </button>
+        </div>
+
+        <div id="loadingMsg">Loading…</div>
+        <div id="tableWrap">
+            <table id="auditTable">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Event</th>
+                        <th>User</th>
+                        <th>Employee</th>
+                        <th>Details</th>
+                        <th>Status</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody id="auditBody"></tbody>
+            </table>
+            <div class="empty-msg" id="emptyMsg" style="display:none;">No audit log entries found.</div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var allEntries = [];
+
+    function statusBadge(s) {
+        if (!s) return '';
+        var cls = s === 'success' ? 'badge-success'
+                : s === 'error'   ? 'badge-error'
+                : s === 'warning' ? 'badge-warning'
+                : 'badge-info';
+        return '<span class="badge ' + cls + '">' + esc(s) + '</span>';
+    }
+
+    function sourceBadge(s) {
+        return s ? '<span class="source-badge">' + esc(s) + '</span>' : '';
+    }
+
+    function esc(s) {
+        if (!s) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function fmtTs(ts) {
+        if (!ts) return '';
+        // Show date and time, trim seconds fraction
+        var d = ts.replace('T', ' ').replace(/\.\d+/, '').replace(/[+-]\d{2}:\d{2}$/, '').replace('Z', '');
+        return d;
+    }
+
+    function render(entries) {
+        var tbody = document.getElementById('auditBody');
+        var empty = document.getElementById('emptyMsg');
+        var table = document.getElementById('auditTable');
+        var count = document.getElementById('countLabel');
+
+        tbody.innerHTML = '';
+        if (entries.length === 0) {
+            table.style.display = 'none';
+            empty.style.display = 'block';
+            count.textContent = '0 entries';
+            return;
+        }
+        table.style.display = '';
+        empty.style.display = 'none';
+        count.textContent = entries.length + ' entr' + (entries.length === 1 ? 'y' : 'ies');
+
+        var rows = '';
+        for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            rows += '<tr>'
+                + '<td class="ts-cell">' + esc(fmtTs(e.timestamp)) + '</td>'
+                + '<td>' + esc(e.event_type) + '</td>'
+                + '<td>' + esc(e.user) + '</td>'
+                + '<td>' + esc(e.employee) + '</td>'
+                + '<td>' + esc(e.details) + '</td>'
+                + '<td>' + statusBadge(e.status) + '</td>'
+                + '<td>' + sourceBadge(e.source) + '</td>'
+                + '</tr>';
+        }
+        tbody.innerHTML = rows;
+    }
+
+    function applyFilters() {
+        var text   = document.getElementById('filterInput').value.toLowerCase();
+        var status = document.getElementById('statusFilter').value.toLowerCase();
+        var source = document.getElementById('sourceFilter').value.toLowerCase();
+
+        var filtered = allEntries.filter(function (e) {
+            if (status && (e.status || '').toLowerCase() !== status) return false;
+            if (source && (e.source || '').toLowerCase() !== source) return false;
+            if (text) {
+                var haystack = [e.event_type, e.user, e.employee, e.details, e.source, e.status]
+                    .map(function (v) { return (v || '').toLowerCase(); }).join(' ');
+                if (haystack.indexOf(text) === -1) return false;
+            }
+            return true;
+        });
+        render(filtered);
+    }
+
+    function load() {
+        document.getElementById('loadingMsg').style.display = 'block';
+        document.getElementById('tableWrap').style.display  = 'none';
+
+        fetch('/api/admin/audit-log')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                allEntries = data.entries || [];
+                document.getElementById('loadingMsg').style.display = 'none';
+                document.getElementById('tableWrap').style.display  = '';
+                applyFilters();
+            })
+            .catch(function () {
+                document.getElementById('loadingMsg').textContent = 'Failed to load audit log.';
+            });
+    }
+
+    document.getElementById('filterInput').addEventListener('input', applyFilters);
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('sourceFilter').addEventListener('change', applyFilters);
+    document.getElementById('refreshBtn').addEventListener('click', load);
+
+    load();
+})();
+</script>
+</body>
+</html>

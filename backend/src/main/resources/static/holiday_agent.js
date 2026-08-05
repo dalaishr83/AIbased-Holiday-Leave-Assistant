@@ -289,6 +289,7 @@
     // ── Rendering ──────────────────────────────────────────────────────────────
 
     function renderEmployees() {
+        if (!employeeList) return;
         employeeList.innerHTML = "";
         employees.forEach(name => {
             const li = document.createElement("li");
@@ -315,6 +316,7 @@
     }
 
     function renderFiles(files) {
+        if (!fileList) return;
         fileList.innerHTML = "";
         files.forEach(f => {
             const li = document.createElement("li");
@@ -336,6 +338,7 @@
     }
 
     function renderYearSelector(years) {
+        if (!yearSelect) return;
         yearSelect.innerHTML = "";
         if (years.length === 0) {
             const opt = document.createElement("option");
@@ -355,6 +358,7 @@
     }
 
     function buildQuickChips() {
+        if (!quickChips) return;
         quickChips.innerHTML = "";
         const templates = [
             "How many days has {name} taken in {year}?",
@@ -404,25 +408,29 @@
     });
     messageInput.addEventListener("input", autoResizeTextarea);
 
-    uploadZone.addEventListener("click", () => fileInput.click());
-    fileInput.addEventListener("change", () => {
-        if (fileInput.files && fileInput.files[0]) uploadFile(fileInput.files[0]);
-        fileInput.value = "";
-    });
+    if (uploadZone && fileInput) {
+        uploadZone.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", () => {
+            if (fileInput.files && fileInput.files[0]) uploadFile(fileInput.files[0]);
+            fileInput.value = "";
+        });
 
-    uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("drag-over"); });
-    uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("drag-over"));
-    uploadZone.addEventListener("drop", e => {
-        e.preventDefault();
-        uploadZone.classList.remove("drag-over");
-        const file = e.dataTransfer && e.dataTransfer.files[0];
-        if (file) uploadFile(file);
-    });
+        uploadZone.addEventListener("dragover", e => { e.preventDefault(); uploadZone.classList.add("drag-over"); });
+        uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("drag-over"));
+        uploadZone.addEventListener("drop", e => {
+            e.preventDefault();
+            uploadZone.classList.remove("drag-over");
+            const file = e.dataTransfer && e.dataTransfer.files[0];
+            if (file) uploadFile(file);
+        });
+    }
 
-    yearSelect.addEventListener("change", () => {
-        currentYear = parseInt(yearSelect.value, 10);
-        buildQuickChips();
-    });
+    if (yearSelect) {
+        yearSelect.addEventListener("change", () => {
+            currentYear = parseInt(yearSelect.value, 10);
+            buildQuickChips();
+        });
+    }
 
     clearHistoryBtn.addEventListener("click", async () => {
         await fetch("/api/clear-history", { method: "POST" });

@@ -62,12 +62,17 @@ public class LeaveAnalysisService {
 
     /**
      * Distributes days proportionally across months for cross-month records.
-     * days_for_month = record.days × (overlap_calendar_days / total_calendar_days_in_record)
+     * days_for_month = record.days × (overlap_working_days / total_working_days_in_record)
+     *
+     * Uses working-day counts (Mon–Fri only) for both the overlap and the total, so the
+     * ratio preserves the actual weekday distribution rather than the calendar-day density.
+     * This prevents inflation when a span contains more non-working days in one month slice
+     * than another (e.g. a long span covering several weekends and public-holiday periods).
      */
     private Map<Integer, Double> computeByMonth(List<LeaveRecord> records) {
         Map<Integer, Double> result = new TreeMap<>();
         for (LeaveRecord record : records) {
-            long totalDays = record.startDate().until(record.endDate()).getDays() + 1;
+            long totalWorkingDays = countWorkingDays(record.startDate(), record.endDate());
             // Iterate by month overlap
             for (int m = 1; m <= 12; m++) {
                 LocalDate monthStart = LocalDate.of(record.year(), m, 1);
@@ -75,13 +80,28 @@ public class LeaveAnalysisService {
                 LocalDate overlapStart = record.startDate().isBefore(monthStart) ? monthStart : record.startDate();
                 LocalDate overlapEnd   = record.endDate().isAfter(monthEnd) ? monthEnd : record.endDate();
                 if (!overlapStart.isAfter(overlapEnd)) {
-                    long overlap = overlapStart.until(overlapEnd).getDays() + 1;
-                    double share = totalDays > 0 ? record.days() * ((double) overlap / totalDays) : 0;
+                    long workingOverlap = countWorkingDays(overlapStart, overlapEnd);
+                    double share = totalWorkingDays > 0
+                            ? record.days() * ((double) workingOverlap / totalWorkingDays)
+                            : 0;
                     result.merge(m, share, Double::sum);
                 }
             }
         }
         return result;
+    }
+
+    /**
+     * Counts Monday–Friday days in the inclusive date range [start, end].
+     * Consistent with how PlannerExcelReader counts working days per span
+     * and with VacationCreationService.countWeekdays().
+     */
+    private long countWorkingDays(LocalDate start, LocalDate end) {
+        long count = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (d.getDayOfWeek().getValue() <= 5) count++;
+        }
+        return count;
     }
 
     private Map<String, Double> computeByType(List<LeaveRecord> records) {

@@ -1,8 +1,7 @@
 package com.holidayleave.assistant.controller;
 
-import com.holidayleave.assistant.config.AppProperties;
+import com.holidayleave.assistant.service.SecretService;
 import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCrypt;
@@ -14,12 +13,18 @@ import java.util.UUID;
 
 /**
  * Handles GET /login, POST /login, GET /logout.
+ *
+ * Credentials are loaded from SecretService (file-backed JSON).
+ * On successful login the session receives:
+ *   - logged_in = true
+ *   - role      = "admin" | "employee"
+ *   - session_id = random UUID (used for pending-vacation keying)
  */
 @Controller
 public class AuthController {
 
     @Autowired
-    private AppProperties props;
+    private SecretService secretService;
 
     @GetMapping("/login")
     public String loginPage(Model model, HttpSession session) {
@@ -35,17 +40,13 @@ public class AuthController {
                           HttpServletRequest request,
                           HttpSession session,
                           Model model) {
-        boolean usernameOk = timingSafeEquals(username, props.getLoginUsername());
-        boolean passwordOk = false;
-        if (!props.getLoginPasswordHash().isEmpty()) {
-            try {
-                passwordOk = BCrypt.checkpw(password, props.getLoginPasswordHash());
-            } catch (Exception ignored) {}
-        }
 
-        if (usernameOk && passwordOk) {
-            session.setAttribute("logged_in", true);
-            session.setAttribute("session_id", UUID.randomUUID().toString().replace("-", ""));
+        String matchedRole = resolveRole(username, password);
+
+        if (matchedRole != null) {
+            session.setAttribute("logged_in",  true);
+            session.setAttribute("role",        matchedRole);
+            session.setAttribute("session_id",  UUID.randomUUID().toString().replace("-", ""));
             return "redirect:/";
         }
 
@@ -57,6 +58,23 @@ public class AuthController {
     public String logout(HttpSession session) {
         session.invalidate();
         return "redirect:/login";
+    }
+
+    /**
+     * Tries to match the submitted credentials against each role in secret.json.
+     * Returns the matched role name ("admin" or "employee"), or null if none match.
+     */
+    private String resolveRole(String username, String password) {
+        for (String role : new String[]{"admin", "employee"}) {
+            String storedUsername = secretService.getUsername(role);
+            String storedHash     = secretService.getHash(role);
+            if (storedUsername == null || storedHash == null) continue;
+            if (!timingSafeEquals(username, storedUsername)) continue;
+            try {
+                if (BCrypt.checkpw(password, storedHash)) return role;
+            } catch (Exception ignored) {}
+        }
+        return null;
     }
 
     /** Timing-safe string comparison to prevent timing attacks. */

@@ -6,6 +6,8 @@ import com.holidayleave.assistant.model.VacationType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
@@ -19,6 +21,9 @@ public class VacationCreationService {
 
     @Autowired
     private VacationTypeService vacationTypeService;
+
+    @Autowired
+    private RestrictedVacationTypeService restrictedVacationTypeService;
 
     public WizardResult process(PendingVacation pending, String message, List<String> allEmployeeNames) {
         WizardState state = pending.getState();
@@ -72,6 +77,13 @@ public class VacationCreationService {
         }
         if (found == null) {
             return new WizardResult("I don't recognise that leave type. Available: " + typeList(),
+                "vacation_prompt", false, false);
+        }
+        // Reject restricted types in the wizard
+        if (restrictedVacationTypeService.isRestricted(found.code())) {
+            return new WizardResult(
+                "The vacation type **" + found.label() + "** is currently disabled by the administrator " +
+                "and cannot be requested at this time. Available: " + typeList(),
                 "vacation_prompt", false, false);
         }
         p.setLeaveType(found.label());
@@ -159,10 +171,14 @@ public class VacationCreationService {
 
     private String typeList() {
         List<VacationType> types = vacationTypeService.findAll();
+        List<String> restricted = restrictedVacationTypeService.getRestrictedTypes();
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < types.size(); i++) {
-            if (i > 0) sb.append(", ");
-            sb.append(types.get(i).label()).append(" (").append(types.get(i).code()).append(")");
+        boolean first = true;
+        for (VacationType t : types) {
+            if (restricted.contains(t.code().toUpperCase())) continue; // skip restricted
+            if (!first) sb.append(", ");
+            sb.append(t.label()).append(" (").append(t.code()).append(")");
+            first = false;
         }
         return sb.toString();
     }

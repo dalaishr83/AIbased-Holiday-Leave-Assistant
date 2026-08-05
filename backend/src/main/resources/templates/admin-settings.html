@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Admin Settings — Holiday Leave Assistant</title>
+    <link rel="stylesheet" th:href="@{/static/holiday_agent.css}">
+    <style>
+        .settings-page { max-width: 760px; margin: 0 auto; padding: 32px 20px; }
+        .settings-page h1 { font-size: 1.4rem; margin-bottom: 8px; color: var(--text); }
+        .settings-page .back-link { display:inline-flex; align-items:center; gap:6px; color:var(--accent); text-decoration:none; font-size:.85rem; margin-bottom:20px; }
+        .settings-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 20px; }
+        .settings-card h2 { font-size: 1rem; margin: 0 0 16px 0; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+        .type-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+        .type-row:last-child { border-bottom: none; }
+        .type-code { font-weight: 600; width: 36px; font-size:.85rem; }
+        .type-label { flex: 1; color: var(--muted); font-size: .85rem; }
+        .type-toggle { margin-left: auto; }
+        .btn-save { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: .85rem; margin-top: 14px; }
+        .btn-save:hover { background: var(--accent-hover); }
+        .field-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+        .field-row label { font-size: .8rem; color: var(--muted); font-weight: 600; }
+        .field-row select, .field-row input[type=password] { border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: .85rem; width: 100%; max-width: 320px; }
+        .alert { padding: 10px 14px; border-radius: 6px; font-size: .85rem; margin-top: 12px; display: none; }
+        .alert.success { background: #d1fae5; color: #065f46; }
+        .alert.error   { background: #fee2e2; color: #991b1b; }
+    </style>
+</head>
+<body style="background:var(--main-bg);overflow:auto;">
+
+<div class="settings-page">
+    <a href="/" class="back-link">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to Dashboard
+    </a>
+    <h1>Admin Settings</h1>
+
+    <!-- Restricted Vacation Types -->
+    <div class="settings-card">
+        <h2>Restricted Vacation Types</h2>
+        <p style="font-size:.85rem;color:var(--muted);margin:0 0 14px 0;">
+            Checked types are <strong>disabled</strong> — employees cannot request them and they are hidden from the UI.
+        </p>
+        <div id="typeList">
+            <div th:each="vt : ${vacationTypes}" class="type-row">
+                <span class="type-code" th:text="${vt.code}">V</span>
+                <span class="type-label" th:text="${vt.label}">Vacation</span>
+                <input type="checkbox" class="type-toggle"
+                       th:value="${vt.code}"
+                       th:checked="${restrictedTypes.contains(vt.code)}"
+                       th:id="'chk_' + ${vt.code}">
+                <label th:for="'chk_' + ${vt.code}" style="font-size:.78rem;color:var(--muted);">Restrict</label>
+            </div>
+        </div>
+        <button class="btn-save" id="saveRestrictedBtn">Save Restricted Types</button>
+        <div class="alert" id="restrictedAlert"></div>
+    </div>
+
+    <!-- Password Reset -->
+    <div class="settings-card">
+        <h2>Password Reset</h2>
+        <div class="field-row">
+            <label for="roleSelect">Role</label>
+            <select id="roleSelect">
+                <option value="admin">Admin</option>
+                <option value="employee">Employee</option>
+            </select>
+        </div>
+        <div class="field-row">
+            <label for="newPassword">New Password (min 6 chars)</label>
+            <input type="password" id="newPassword" placeholder="Enter new password" autocomplete="new-password">
+        </div>
+        <button class="btn-save" id="resetPasswordBtn">Reset Password</button>
+        <div class="alert" id="passwordAlert"></div>
+    </div>
+</div>
+
+<script>
+(function () {
+    // Save restricted types
+    document.getElementById('saveRestrictedBtn').addEventListener('click', function () {
+        var checked = [];
+        document.querySelectorAll('.type-toggle:checked').forEach(function (cb) {
+            checked.push(cb.value);
+        });
+        fetch('/api/admin/settings/restricted-types', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ restricted_types: checked })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            showAlert('restrictedAlert', data.error ? data.error : data.message, !data.error);
+        }).catch(function () { showAlert('restrictedAlert', 'Request failed.', false); });
+    });
+
+    // Reset password
+    document.getElementById('resetPasswordBtn').addEventListener('click', function () {
+        var role = document.getElementById('roleSelect').value;
+        var pwd  = document.getElementById('newPassword').value;
+        if (!pwd || pwd.length < 6) {
+            showAlert('passwordAlert', 'Password must be at least 6 characters.', false);
+            return;
+        }
+        fetch('/api/admin/settings/password-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: role, new_password: pwd })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            showAlert('passwordAlert', data.error ? data.error : data.message, !data.error);
+            if (!data.error) document.getElementById('newPassword').value = '';
+        }).catch(function () { showAlert('passwordAlert', 'Request failed.', false); });
+    });
+
+    function showAlert(id, msg, success) {
+        var el = document.getElementById(id);
+        el.textContent = msg;
+        el.className = 'alert ' + (success ? 'success' : 'error');
+        el.style.display = 'block';
+        setTimeout(function () { el.style.display = 'none'; }, 5000);
+    }
+})();
+</script>
+</body>
+</html>
