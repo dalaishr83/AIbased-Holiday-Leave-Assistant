@@ -291,11 +291,12 @@ public class AdminController {
                 if ("PC".equalsIgnoreCase(r.leaveType()) ||
                     "Personal Choice Holiday".equalsIgnoreCase(r.leaveType())) {
                     Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("employee_name", r.employeeName());
-                    m.put("start_date",    r.startDate().toString());
-                    m.put("end_date",      r.endDate().toString());
-                    m.put("days",          r.days());
-                    m.put("year",          r.year());
+                    m.put("employee_name",  r.employeeName());
+                    m.put("start_date",     r.startDate().toString());
+                    m.put("end_date",       r.endDate().toString());
+                    m.put("days",           r.days());
+                    m.put("year",           r.year());
+                    m.put("holiday_type",   r.leaveType());
                     result.add(m);
                 }
             }

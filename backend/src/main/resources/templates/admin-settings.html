@@ -6,91 +6,269 @@
     <title>Admin Settings — Holiday Leave Assistant</title>
     <link rel="stylesheet" th:href="@{/static/holiday_agent.css}">
     <style>
-        .settings-page { max-width: 760px; margin: 0 auto; padding: 32px 20px; }
-        .settings-page h1 { font-size: 1.4rem; margin-bottom: 8px; color: var(--text); }
-        .settings-page .back-link { display:inline-flex; align-items:center; gap:6px; color:var(--accent); text-decoration:none; font-size:.85rem; margin-bottom:20px; }
-        .settings-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; margin-bottom: 20px; }
-        .settings-card h2 { font-size: 1rem; margin: 0 0 16px 0; color: var(--text); border-bottom: 1px solid var(--border); padding-bottom: 10px; }
-        .type-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+        /* ── Page shell — scrollable, no overflow ──────────────────────────── */
+        html, body { overflow: auto; }
+
+        .settings-page {
+            max-width: 680px;
+            margin: 0 auto;
+            padding: 28px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+        }
+
+        /* ── Back link + heading ─────────────────────────────────────────── */
+        .settings-page .back-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            color: var(--accent); text-decoration: none;
+            font-size: .85rem; margin-bottom: 16px;
+        }
+        .settings-page h1 {
+            font-size: 1.3rem; font-weight: 700;
+            color: var(--text); margin: 0 0 20px 0;
+        }
+
+        /* ── Collapsible card ────────────────────────────────────────────── */
+        .sc-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 14px;
+            overflow: hidden;   /* keeps rounded corners during collapse */
+        }
+
+        /* Card header — the clickable toggle row */
+        .sc-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 18px;
+            cursor: pointer;
+            user-select: none;
+            gap: 10px;
+            transition: background .12s;
+        }
+        .sc-header:hover { background: var(--bg); }
+
+        .sc-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+        .sc-icon {
+            width: 30px; height: 30px; border-radius: 7px;
+            background: rgba(42,91,215,.1);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0; color: var(--accent);
+        }
+
+        .sc-title {
+            font-size: .92rem; font-weight: 700; color: var(--text);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .sc-subtitle {
+            font-size: .75rem; color: var(--muted); margin-top: 1px;
+        }
+
+        .sc-chevron {
+            color: var(--muted); flex-shrink: 0;
+            transition: transform .22s ease;
+        }
+        .sc-card.open .sc-chevron { transform: rotate(180deg); }
+
+        /* Card body — collapses/expands */
+        .sc-body {
+            display: none;
+            padding: 0 18px 18px;
+            border-top: 1px solid var(--border);
+        }
+        .sc-card.open .sc-body { display: block; }
+
+        .sc-body-inner { padding-top: 16px; }
+
+        /* ── Vacation type rows ───────────────────────────────────────────── */
+        .type-row {
+            display: flex; align-items: center; gap: 10px;
+            padding: 7px 0; border-bottom: 1px solid var(--border);
+        }
         .type-row:last-child { border-bottom: none; }
-        .type-code { font-weight: 600; width: 36px; font-size:.85rem; }
-        .type-label { flex: 1; color: var(--muted); font-size: .85rem; }
-        .type-toggle { margin-left: auto; }
-        .btn-save { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 8px 18px; cursor: pointer; font-size: .85rem; margin-top: 14px; }
+        .type-code  { font-weight: 700; width: 32px; font-size: .82rem; color: var(--text); flex-shrink: 0; }
+        .type-label { flex: 1; color: var(--muted); font-size: .84rem; }
+        .type-toggle { margin-left: auto; flex-shrink: 0; cursor: pointer; }
+
+        /* ── Password sub-sections ───────────────────────────────────────── */
+        .pw-section { margin-bottom: 18px; }
+        .pw-section:last-child { margin-bottom: 0; }
+        .pw-section-title {
+            font-size: .82rem; font-weight: 700; color: var(--text);
+            margin: 0 0 12px 0; display: flex; align-items: center; gap: 6px;
+        }
+        .pw-section-title::before {
+            content: '';
+            display: inline-block; width: 3px; height: 14px;
+            background: var(--accent); border-radius: 2px; flex-shrink: 0;
+        }
+        .pw-divider {
+            border: none; border-top: 1px solid var(--border); margin: 18px 0;
+        }
+
+        /* ── Field rows ──────────────────────────────────────────────────── */
+        .field-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+        .field-row label { font-size: .78rem; color: var(--muted); font-weight: 600; }
+        .field-row select,
+        .field-row input[type=password] {
+            border: 1px solid var(--border); border-radius: 6px;
+            padding: 7px 10px; font-size: .84rem;
+            width: 100%; max-width: 340px;
+            background: var(--bg); color: var(--text);
+            transition: border-color .15s;
+        }
+        .field-row select:focus,
+        .field-row input[type=password]:focus {
+            outline: none; border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(42,91,215,.1);
+        }
+
+        /* ── Buttons ─────────────────────────────────────────────────────── */
+        .btn-save {
+            background: var(--accent); color: #fff;
+            border: none; border-radius: 6px;
+            padding: 8px 18px; cursor: pointer;
+            font-size: .84rem; font-weight: 600;
+            transition: background .12s;
+        }
         .btn-save:hover { background: var(--accent-hover); }
-        .field-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-        .field-row label { font-size: .8rem; color: var(--muted); font-weight: 600; }
-        .field-row select, .field-row input[type=password] { border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px; font-size: .85rem; width: 100%; max-width: 320px; }
-        .alert { padding: 10px 14px; border-radius: 6px; font-size: .85rem; margin-top: 12px; display: none; }
+        .btn-save:active { transform: scale(.98); }
+
+        /* ── Alert banners ───────────────────────────────────────────────── */
+        .alert {
+            padding: 9px 13px; border-radius: 6px;
+            font-size: .83rem; margin-top: 10px; display: none;
+        }
         .alert.success { background: #d1fae5; color: #065f46; }
         .alert.error   { background: #fee2e2; color: #991b1b; }
+
+        /* ── Description text ────────────────────────────────────────────── */
+        .sc-desc {
+            font-size: .82rem; color: var(--muted);
+            margin: 0 0 14px 0; line-height: 1.5;
+        }
+
+        /* ── Mobile overrides ────────────────────────────────────────────── */
+        @media (max-width: 480px) {
+            .settings-page { padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px)); }
+            .settings-page h1 { font-size: 1.15rem; margin-bottom: 14px; }
+            .sc-header { padding: 12px 14px; }
+            .sc-body  { padding: 0 14px 14px; }
+            .field-row select,
+            .field-row input[type=password] { max-width: 100%; }
+        }
     </style>
 </head>
-<body style="background:var(--main-bg);overflow:auto;">
+<body style="background:var(--main-bg);">
 
 <div class="settings-page">
+
     <a href="/" class="back-link">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
         Back to Dashboard
     </a>
     <h1>Admin Settings</h1>
 
-    <!-- Restricted Vacation Types -->
-    <div class="settings-card">
-        <h2>Restricted Vacation Types</h2>
-        <p style="font-size:.85rem;color:var(--muted);margin:0 0 14px 0;">
-            Checked types are <strong>disabled</strong> — employees cannot request them and they are hidden from the UI.
-        </p>
-        <div id="typeList">
-            <div th:each="vt : ${vacationTypes}" class="type-row">
-                <span class="type-code" th:text="${vt.code}">V</span>
-                <span class="type-label" th:text="${vt.label}">Vacation</span>
-                <input type="checkbox" class="type-toggle"
-                       th:value="${vt.code}"
-                       th:checked="${restrictedTypes.contains(vt.code)}"
-                       th:id="'chk_' + ${vt.code}">
-                <label th:for="'chk_' + ${vt.code}" style="font-size:.78rem;color:var(--muted);">Restrict</label>
+    <!-- ── Card 1: Restricted Vacation Types ─────────────────────────── -->
+    <div class="sc-card open" id="card-restricted">
+        <div class="sc-header" data-target="card-restricted">
+            <div class="sc-header-left">
+                <div class="sc-icon">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                </div>
+                <div>
+                    <div class="sc-title">Restricted Vacation Types</div>
+                    <div class="sc-subtitle">Disable types employees can request</div>
+                </div>
+            </div>
+            <svg class="sc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="sc-body">
+            <div class="sc-body-inner">
+                <p class="sc-desc">Checked types are <strong>disabled</strong> — employees cannot request them and they are hidden from the UI.</p>
+                <div id="typeList">
+                    <div th:each="vt : ${vacationTypes}" class="type-row">
+                        <span class="type-code" th:text="${vt.code}">V</span>
+                        <span class="type-label" th:text="${vt.label}">Vacation</span>
+                        <input type="checkbox" class="type-toggle"
+                               th:value="${vt.code}"
+                               th:checked="${restrictedTypes.contains(vt.code)}"
+                               th:id="'chk_' + ${vt.code}">
+                        <label th:for="'chk_' + ${vt.code}" style="font-size:.78rem;color:var(--muted);flex-shrink:0;">Restrict</label>
+                    </div>
+                </div>
+                <button class="btn-save" id="saveRestrictedBtn" style="margin-top:16px;">Save Restricted Types</button>
+                <div class="alert" id="restrictedAlert"></div>
             </div>
         </div>
-        <button class="btn-save" id="saveRestrictedBtn">Save Restricted Types</button>
-        <div class="alert" id="restrictedAlert"></div>
     </div>
 
-    <!-- Password Reset -->
-    <div class="settings-card">
-        <h2>Password Reset</h2>
-
-        <!-- Admin account -->
-        <h3 style="font-size:.85rem;font-weight:700;color:var(--text);margin:0 0 10px 0;">Admin Account</h3>
-        <div class="field-row">
-            <label for="adminNewPassword">New Password (min 6 chars)</label>
-            <input type="password" id="adminNewPassword" placeholder="Enter new admin password" autocomplete="new-password">
+    <!-- ── Card 2: Password Reset ─────────────────────────────────────── -->
+    <div class="sc-card" id="card-password">
+        <div class="sc-header" data-target="card-password">
+            <div class="sc-header-left">
+                <div class="sc-icon">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <div>
+                    <div class="sc-title">Password Reset</div>
+                    <div class="sc-subtitle">Update admin or employee account passwords</div>
+                </div>
+            </div>
+            <svg class="sc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <button class="btn-save" id="resetAdminPasswordBtn">Reset Admin Password</button>
-        <div class="alert" id="adminPasswordAlert"></div>
+        <div class="sc-body">
+            <div class="sc-body-inner">
 
-        <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;">
+                <!-- Admin account -->
+                <div class="pw-section">
+                    <p class="pw-section-title">Admin Account</p>
+                    <div class="field-row">
+                        <label for="adminNewPassword">New Password (min 6 chars)</label>
+                        <input type="password" id="adminNewPassword" placeholder="Enter new admin password" autocomplete="new-password">
+                    </div>
+                    <button class="btn-save" id="resetAdminPasswordBtn">Reset Admin Password</button>
+                    <div class="alert" id="adminPasswordAlert"></div>
+                </div>
 
-        <!-- Employee accounts -->
-        <h3 style="font-size:.85rem;font-weight:700;color:var(--text);margin:0 0 10px 0;">Employee Account</h3>
-        <div class="field-row">
-            <label for="employeeSelect">Employee</label>
-            <select id="employeeSelect">
-                <option value="">— Loading employees… —</option>
-            </select>
+                <hr class="pw-divider">
+
+                <!-- Employee accounts -->
+                <div class="pw-section">
+                    <p class="pw-section-title">Employee Account</p>
+                    <div class="field-row">
+                        <label for="employeeSelect">Employee</label>
+                        <select id="employeeSelect">
+                            <option value="">— Loading employees… —</option>
+                        </select>
+                    </div>
+                    <div class="field-row">
+                        <label for="employeeNewPassword">New Password (min 6 chars)</label>
+                        <input type="password" id="employeeNewPassword" placeholder="Enter new employee password" autocomplete="new-password">
+                    </div>
+                    <button class="btn-save" id="resetEmployeePasswordBtn">Reset Employee Password</button>
+                    <div class="alert" id="employeePasswordAlert"></div>
+                </div>
+
+            </div>
         </div>
-        <div class="field-row">
-            <label for="employeeNewPassword">New Password (min 6 chars)</label>
-            <input type="password" id="employeeNewPassword" placeholder="Enter new employee password" autocomplete="new-password">
-        </div>
-        <button class="btn-save" id="resetEmployeePasswordBtn">Reset Employee Password</button>
-        <div class="alert" id="employeePasswordAlert"></div>
     </div>
-</div>
+
+</div><!-- /.settings-page -->
 
 <script>
 (function () {
-    // ── Load employee credentials into the dropdown on page load ──────────────
+    'use strict';
+
+    // ── Collapsible cards ─────────────────────────────────────────────────
+    document.querySelectorAll('.sc-header').forEach(function (header) {
+        header.addEventListener('click', function () {
+            var card = document.getElementById(header.getAttribute('data-target'));
+            if (!card) return;
+            card.classList.toggle('open');
+        });
+    });
+
+    // ── Load employee credentials into the dropdown on page load ──────────
     function loadEmployeeDropdown() {
         fetch('/api/admin/settings/employee-credentials')
             .then(function (r) { return r.json(); })
@@ -119,7 +297,7 @@
     }
     loadEmployeeDropdown();
 
-    // ── Save restricted types ─────────────────────────────────────────────────
+    // ── Save restricted types ─────────────────────────────────────────────
     document.getElementById('saveRestrictedBtn').addEventListener('click', function () {
         var checked = [];
         document.querySelectorAll('.type-toggle:checked').forEach(function (cb) {
@@ -134,7 +312,7 @@
         }).catch(function () { showAlert('restrictedAlert', 'Request failed.', false); });
     });
 
-    // ── Reset admin password ──────────────────────────────────────────────────
+    // ── Reset admin password ──────────────────────────────────────────────
     document.getElementById('resetAdminPasswordBtn').addEventListener('click', function () {
         var pwd = document.getElementById('adminNewPassword').value;
         if (!pwd || pwd.length < 6) {
@@ -151,7 +329,7 @@
         }).catch(function () { showAlert('adminPasswordAlert', 'Request failed.', false); });
     });
 
-    // ── Reset employee password ───────────────────────────────────────────────
+    // ── Reset employee password ───────────────────────────────────────────
     document.getElementById('resetEmployeePasswordBtn').addEventListener('click', function () {
         var username = document.getElementById('employeeSelect').value;
         var pwd      = document.getElementById('employeeNewPassword').value;
@@ -173,6 +351,7 @@
         }).catch(function () { showAlert('employeePasswordAlert', 'Request failed.', false); });
     });
 
+    // ── Shared alert helper ───────────────────────────────────────────────
     function showAlert(id, msg, success) {
         var el = document.getElementById(id);
         el.textContent = msg;

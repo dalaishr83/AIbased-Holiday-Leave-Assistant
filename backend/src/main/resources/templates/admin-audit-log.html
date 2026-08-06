@@ -6,47 +6,170 @@
     <title>Audit Log — Holiday Leave Assistant</title>
     <link rel="stylesheet" th:href="@{/static/holiday_agent.css}">
     <style>
-        .audit-page { max-width: 960px; margin: 0 auto; padding: 32px 20px; }
-        .audit-page h1 { font-size: 1.4rem; margin-bottom: 8px; }
-        .audit-page .back-link { display:inline-flex; align-items:center; gap:6px; color:var(--accent); text-decoration:none; font-size:.85rem; margin-bottom:20px; }
-        .audit-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
-        .audit-card h2 { font-size: 1rem; margin: 0 0 14px 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; display:flex; align-items:center; gap:8px; }
-        .audit-toolbar { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+        /*
+         * Full-viewport layout: html/body fill 100vh, the page column is a flex
+         * column that stretches to fill all remaining space. The table-scroll div
+         * takes whatever height is left after the chrome above and below it.
+         * This means NO fixed px heights anywhere — the table grows/shrinks with
+         * the window and pagination sits flush below it.
+         */
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden; /* page-level scroll is gone; table scrolls internally */
+        }
+        body { background: var(--main-bg); }
+
+        /* Outer page column — fills viewport, scrolls as a whole on very small heights */
+        .audit-page {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 24px 20px 16px;
+            height: 100%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        .audit-page h1 { font-size: 1.4rem; margin: 0 0 8px; flex-shrink: 0; }
+        .audit-page .back-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            color: var(--accent); text-decoration: none; font-size: .85rem;
+            margin-bottom: 16px; flex-shrink: 0;
+        }
+
+        /* Card fills remaining height of the column */
+        .audit-card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: 10px; padding: 20px 24px 16px;
+            flex: 1 1 0;           /* grow to fill, shrink when window shrinks */
+            min-height: 0;         /* allow flex child to shrink below content size */
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .audit-card h2 {
+            font-size: 1rem; margin: 0 0 12px;
+            border-bottom: 1px solid var(--border); padding-bottom: 10px;
+            display: flex; align-items: center; gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .audit-toolbar {
+            display: flex; align-items: center; gap: 10px;
+            margin-bottom: 12px; flex-wrap: wrap; flex-shrink: 0;
+        }
         .audit-toolbar input[type=text] {
             flex: 1; min-width: 180px; padding: 6px 10px;
             border: 1px solid var(--border); border-radius: 6px;
-            background: var(--bg); color: var(--text); font-size:.85rem;
+            background: var(--bg); color: var(--text); font-size: .85rem;
         }
         .audit-toolbar select {
             padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
-            background: var(--bg); color: var(--text); font-size:.85rem;
+            background: var(--bg); color: var(--text); font-size: .85rem;
         }
         .audit-toolbar .btn-refresh {
             padding: 6px 14px; border-radius: 6px; border: 1px solid var(--border);
-            background: var(--bg); color: var(--text); cursor: pointer; font-size:.85rem;
-            display:inline-flex; align-items:center; gap:5px;
+            background: var(--bg); color: var(--text); cursor: pointer; font-size: .85rem;
+            display: inline-flex; align-items: center; gap: 5px;
         }
         .audit-toolbar .btn-refresh:hover { background: var(--sidebar-hover); }
-        table { width:100%; border-collapse:collapse; font-size:.82rem; }
-        thead th { text-align:left; padding:8px 10px; background:var(--bg); color:var(--muted); font-weight:600; border-bottom:2px solid var(--border); white-space:nowrap; }
-        tbody td { padding:7px 10px; border-bottom:1px solid var(--border); color:var(--text); word-break:break-word; }
-        tbody tr:last-child td { border-bottom:none; }
-        tbody tr:hover { background: var(--sidebar-hover); }
-        .badge {
-            display:inline-block; padding:2px 8px; border-radius:10px; font-size:.75rem; font-weight:600; white-space:nowrap;
+
+        /* tableWrap fills the remaining card space */
+        #tableWrap {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
         }
-        .badge-success { background:#d1fae5; color:#065f46; }
-        .badge-error   { background:#fee2e2; color:#991b1b; }
-        .badge-warning { background:#fef3c7; color:#92400e; }
-        .badge-info    { background:#dbeafe; color:#1e40af; }
-        .source-badge  { display:inline-block; padding:2px 7px; border-radius:8px; font-size:.73rem; background:var(--border); color:var(--muted); }
-        .empty-msg { color:var(--muted); font-size:.85rem; padding:20px 0; text-align:center; }
-        .count-label { font-size:.8rem; color:var(--muted); margin-left:auto; }
-        .ts-cell { white-space:nowrap; color:var(--muted); font-size:.78rem; }
-        #loadingMsg { color:var(--muted); font-size:.85rem; padding:20px 0; text-align:center; display:none; }
+
+        /* The scroll container expands to fill tableWrap — no fixed height */
+        .table-scroll {
+            flex: 1 1 0;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+        thead th {
+            text-align: left; padding: 8px 10px;
+            background: var(--bg); color: var(--muted); font-weight: 600;
+            border-bottom: 2px solid var(--border); white-space: nowrap;
+            position: sticky; top: 0; z-index: 1;
+        }
+        tbody td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text); word-break: break-word; }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover { background: var(--sidebar-hover); }
+
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; white-space: nowrap; }
+        .badge-success { background: #d1fae5; color: #065f46; }
+        .badge-error   { background: #fee2e2; color: #991b1b; }
+        .badge-warning { background: #fef3c7; color: #92400e; }
+        .badge-info    { background: #dbeafe; color: #1e40af; }
+        .source-badge  { display: inline-block; padding: 2px 7px; border-radius: 8px; font-size: .73rem; background: var(--border); color: var(--muted); }
+
+        .empty-msg { color: var(--muted); font-size: .85rem; padding: 20px 0; text-align: center; }
+        .count-label { font-size: .8rem; color: var(--muted); margin-left: auto; }
+        .ts-cell { white-space: nowrap; color: var(--muted); font-size: .78rem; }
+        #loadingMsg { color: var(--muted); font-size: .85rem; padding: 20px 0; text-align: center; display: none; flex-shrink: 0; }
+
+        /* Pagination — pinned below the scroll area, never overlaps it */
+        .pagination {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 8px;
+            margin-top: 10px;
+            font-size: .82rem; color: var(--muted);
+            flex-shrink: 0;
+        }
+        .pagination-controls { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+        .pg-btn {
+            padding: 4px 10px; border-radius: 5px;
+            border: 1px solid var(--border);
+            background: var(--bg); color: var(--text);
+            cursor: pointer; font-size: .8rem; line-height: 1.4;
+        }
+        .pg-btn:hover:not(:disabled) { background: var(--sidebar-hover); }
+        .pg-btn:disabled { opacity: .4; cursor: default; }
+        .pg-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .pg-ellipsis { padding: 4px 6px; color: var(--muted); }
+
+        /* ── Responsive ──────────────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            .audit-page { padding: 16px 12px 12px; }
+            .audit-toolbar { gap: 8px; }
+            .audit-toolbar input[type=text] { min-width: 0; }
+        }
+
+        @media (max-width: 480px) {
+            .audit-card { padding: 12px 10px 10px; }
+
+            /* Card-stack layout — no horizontal scroll needed */
+            thead { display: none; }
+            .table-scroll {
+                overflow-x: visible;
+                border: none; border-radius: 0;
+            }
+            tbody tr {
+                display: block;
+                border: 1px solid var(--border); border-radius: 6px;
+                margin-bottom: 8px; padding: 8px 10px;
+            }
+            tbody td {
+                display: flex; justify-content: space-between; align-items: flex-start;
+                gap: 8px; padding: 3px 0; border-bottom: none; font-size: .8rem;
+            }
+            tbody td::before {
+                content: attr(data-label);
+                font-weight: 600; color: var(--muted);
+                flex-shrink: 0; min-width: 80px; font-size: .75rem;
+            }
+            .pagination { justify-content: center; }
+        }
     </style>
 </head>
-<body style="background:var(--main-bg);overflow:auto;">
+<body>
 
 <div class="audit-page">
     <a href="/" class="back-link">
@@ -69,7 +192,7 @@
         </h2>
 
         <div class="audit-toolbar">
-            <input type="text" id="filterInput" placeholder="Filter by user, employee, event, details…">
+            <input type="text" id="filterInput" placeholder="Filter by timestamp, user, employee, event, details…">
             <select id="statusFilter">
                 <option value="">All statuses</option>
                 <option value="success">Success</option>
@@ -90,28 +213,39 @@
 
         <div id="loadingMsg">Loading…</div>
         <div id="tableWrap">
-            <table id="auditTable">
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>Event</th>
-                        <th>User</th>
-                        <th>Employee</th>
-                        <th>Details</th>
-                        <th>Status</th>
-                        <th>Source</th>
-                    </tr>
-                </thead>
-                <tbody id="auditBody"></tbody>
-            </table>
+            <div class="table-scroll" id="tableScroll">
+                <table id="auditTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Event</th>
+                            <th>User</th>
+                            <th>Employee</th>
+                            <th>Details</th>
+                            <th>Status</th>
+                            <th>Source</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditBody"></tbody>
+                </table>
+            </div>
             <div class="empty-msg" id="emptyMsg" style="display:none;">No audit log entries found.</div>
+            <div class="pagination" id="paginationBar" style="display:none;">
+                <span id="pageInfo"></span>
+                <div class="pagination-controls" id="pageControls"></div>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
 (function () {
+    'use strict';
+
+    var PAGE_SIZE = 10;
     var allEntries = [];
+    var filteredEntries = [];
+    var currentPage = 1;
 
     function statusBadge(s) {
         if (!s) return '';
@@ -137,42 +271,123 @@
 
     function fmtTs(ts) {
         if (!ts) return '';
-        // Show date and time, trim seconds fraction
-        var d = ts.replace('T', ' ').replace(/\.\d+/, '').replace(/[+-]\d{2}:\d{2}$/, '').replace('Z', '');
-        return d;
+        return ts.replace('T', ' ').replace(/\.\d+/, '').replace(/[+-]\d{2}:\d{2}$/, '').replace('Z', '');
     }
 
-    function render(entries) {
-        var tbody = document.getElementById('auditBody');
-        var empty = document.getElementById('emptyMsg');
-        var table = document.getElementById('auditTable');
-        var count = document.getElementById('countLabel');
+    function renderPage(page) {
+        var tbody     = document.getElementById('auditBody');
+        var empty     = document.getElementById('emptyMsg');
+        var scroll    = document.getElementById('tableScroll');
+        var pagBar    = document.getElementById('paginationBar');
+        var countEl   = document.getElementById('countLabel');
+        var pageInfo  = document.getElementById('pageInfo');
+        var pageCtrl  = document.getElementById('pageControls');
 
         tbody.innerHTML = '';
-        if (entries.length === 0) {
-            table.style.display = 'none';
-            empty.style.display = 'block';
-            count.textContent = '0 entries';
+
+        if (filteredEntries.length === 0) {
+            scroll.style.display = 'none';
+            empty.style.display  = 'block';
+            pagBar.style.display = 'none';
+            countEl.textContent  = '0 entries';
             return;
         }
-        table.style.display = '';
-        empty.style.display = 'none';
-        count.textContent = entries.length + ' entr' + (entries.length === 1 ? 'y' : 'ies');
+
+        scroll.style.display = '';
+        empty.style.display  = 'none';
+
+        var totalPages = Math.ceil(filteredEntries.length / PAGE_SIZE);
+        if (page < 1) page = 1;
+        if (page > totalPages) page = totalPages;
+        currentPage = page;
+
+        var start = (currentPage - 1) * PAGE_SIZE;
+        var end   = Math.min(start + PAGE_SIZE, filteredEntries.length);
+        var slice = filteredEntries.slice(start, end);
 
         var rows = '';
-        for (var i = 0; i < entries.length; i++) {
-            var e = entries[i];
+        for (var i = 0; i < slice.length; i++) {
+            var e = slice[i];
             rows += '<tr>'
-                + '<td class="ts-cell">' + esc(fmtTs(e.timestamp)) + '</td>'
-                + '<td>' + esc(e.event_type) + '</td>'
-                + '<td>' + esc(e.user) + '</td>'
-                + '<td>' + esc(e.employee) + '</td>'
-                + '<td>' + esc(e.details) + '</td>'
-                + '<td>' + statusBadge(e.status) + '</td>'
-                + '<td>' + sourceBadge(e.source) + '</td>'
+                + '<td class="ts-cell" data-label="Timestamp">' + esc(fmtTs(e.timestamp)) + '</td>'
+                + '<td data-label="Event">'    + esc(e.event_type) + '</td>'
+                + '<td data-label="User">'     + esc(e.user) + '</td>'
+                + '<td data-label="Employee">' + esc(e.employee) + '</td>'
+                + '<td data-label="Details">'  + esc(e.details) + '</td>'
+                + '<td data-label="Status">'   + statusBadge(e.status) + '</td>'
+                + '<td data-label="Source">'   + sourceBadge(e.source) + '</td>'
                 + '</tr>';
         }
         tbody.innerHTML = rows;
+
+        /* Reset scroll position to top of table on page change */
+        scroll.scrollTop = 0;
+
+        /* Count label shows total filtered */
+        countEl.textContent = filteredEntries.length + ' entr' + (filteredEntries.length === 1 ? 'y' : 'ies');
+
+        /* Pagination bar */
+        if (totalPages <= 1) {
+            pagBar.style.display = 'none';
+            return;
+        }
+        pagBar.style.display = '';
+        pageInfo.textContent = 'Showing ' + (start + 1) + '–' + end + ' of ' + filteredEntries.length;
+
+        /* Build page buttons with ellipsis for large sets */
+        var html = '';
+
+        html += '<button class="pg-btn" id="pgPrev" ' + (currentPage === 1 ? 'disabled' : '') + '>&#8249; Prev</button>';
+
+        var pages = buildPageList(currentPage, totalPages);
+        for (var j = 0; j < pages.length; j++) {
+            var p = pages[j];
+            if (p === '…') {
+                html += '<span class="pg-ellipsis">…</span>';
+            } else {
+                html += '<button class="pg-btn' + (p === currentPage ? ' active' : '') + '" data-page="' + p + '">' + p + '</button>';
+            }
+        }
+
+        html += '<button class="pg-btn" id="pgNext" ' + (currentPage === totalPages ? 'disabled' : '') + '>Next &#8250;</button>';
+
+        pageCtrl.innerHTML = html;
+
+        /* Attach listeners */
+        var prev = document.getElementById('pgPrev');
+        var next = document.getElementById('pgNext');
+        if (prev) prev.addEventListener('click', function () { renderPage(currentPage - 1); });
+        if (next) next.addEventListener('click', function () { renderPage(currentPage + 1); });
+
+        var numBtns = pageCtrl.querySelectorAll('[data-page]');
+        for (var k = 0; k < numBtns.length; k++) {
+            numBtns[k].addEventListener('click', function () {
+                renderPage(parseInt(this.getAttribute('data-page'), 10));
+            });
+        }
+    }
+
+    function buildPageList(current, total) {
+        /* Always show first, last, current ±1; ellipsis for gaps */
+        if (total <= 7) {
+            var arr = [];
+            for (var i = 1; i <= total; i++) arr.push(i);
+            return arr;
+        }
+        var pages = [];
+        var shown = {};
+        function add(n) { if (n >= 1 && n <= total && !shown[n]) { shown[n] = true; pages.push(n); } }
+        add(1); add(2);
+        add(current - 1); add(current); add(current + 1);
+        add(total - 1); add(total);
+        pages.sort(function (a, b) { return a - b; });
+
+        var result = [];
+        for (var j = 0; j < pages.length; j++) {
+            if (j > 0 && pages[j] - pages[j - 1] > 1) result.push('…');
+            result.push(pages[j]);
+        }
+        return result;
     }
 
     function applyFilters() {
@@ -180,17 +395,17 @@
         var status = document.getElementById('statusFilter').value.toLowerCase();
         var source = document.getElementById('sourceFilter').value.toLowerCase();
 
-        var filtered = allEntries.filter(function (e) {
+        filteredEntries = allEntries.filter(function (e) {
             if (status && (e.status || '').toLowerCase() !== status) return false;
             if (source && (e.source || '').toLowerCase() !== source) return false;
             if (text) {
-                var haystack = [e.event_type, e.user, e.employee, e.details, e.source, e.status]
+                var haystack = [fmtTs(e.timestamp), e.event_type, e.user, e.employee, e.details, e.source, e.status]
                     .map(function (v) { return (v || '').toLowerCase(); }).join(' ');
                 if (haystack.indexOf(text) === -1) return false;
             }
             return true;
         });
-        render(filtered);
+        renderPage(1);
     }
 
     function load() {
