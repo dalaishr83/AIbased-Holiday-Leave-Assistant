@@ -14,6 +14,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.HttpSession;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.*;
@@ -86,16 +87,19 @@ public class AdminController {
     /** POST /api/admin/settings/restricted-types — replaces restricted codes list */
     @PostMapping("/api/admin/settings/restricted-types")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> setRestrictedTypes(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> setRestrictedTypes(@RequestBody Map<String, Object> body,
+                                                                  HttpSession session) {
         Object raw = body.get("restricted_types");
         if (!(raw instanceof List)) {
             return ResponseEntity.badRequest().body(err("restricted_types must be an array of code strings."));
         }
         List<String> codes = new ArrayList<>();
         for (Object o : (List<?>) raw) codes.add(String.valueOf(o));
+        String actingUser = (String) session.getAttribute("username");
+        if (actingUser == null) actingUser = "admin";
         try {
             restrictedTypeService.setRestrictedTypes(codes);
-            auditService.log("restricted_types_updated", "admin", null,
+            auditService.log("restricted_types_updated", actingUser, null,
                     "Updated restricted types: " + codes, "success", "api");
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("message", "Restricted vacation types updated.");
@@ -172,8 +176,11 @@ public class AdminController {
      */
     @PostMapping("/api/admin/settings/promote")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> promoteToAdmin(@RequestBody Map<String, Object> body) {
-        return updateRoles(body, "admin", "promote");
+    public ResponseEntity<Map<String, Object>> promoteToAdmin(@RequestBody Map<String, Object> body,
+                                                              HttpSession session) {
+        String actingUser = (String) session.getAttribute("username");
+        if (actingUser == null) actingUser = "admin";
+        return updateRoles(body, "admin", "promote", actingUser);
     }
 
     /**
@@ -184,13 +191,16 @@ public class AdminController {
      */
     @PostMapping("/api/admin/settings/demote")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> demoteToEmployee(@RequestBody Map<String, Object> body) {
-        return updateRoles(body, "employee", "demote");
+    public ResponseEntity<Map<String, Object>> demoteToEmployee(@RequestBody Map<String, Object> body,
+                                                                HttpSession session) {
+        String actingUser = (String) session.getAttribute("username");
+        if (actingUser == null) actingUser = "admin";
+        return updateRoles(body, "employee", "demote", actingUser);
     }
 
     /** Shared helper — updates the role field for a batch of usernames. */
     private ResponseEntity<Map<String, Object>> updateRoles(
-            Map<String, Object> body, String newRole, String action) {
+            Map<String, Object> body, String newRole, String action, String actingUser) {
 
         Object raw = body.get("usernames");
         if (!(raw instanceof List)) {
@@ -214,7 +224,7 @@ public class AdminController {
             }
             try {
                 secretService.updateRole(username, newRole);
-                auditService.log("role_" + action, "admin", username,
+                auditService.log("role_" + action, actingUser, username,
                         "Role updated to '" + newRole + "' for user: " + username, "success", "api");
                 updated++;
             } catch (IOException e) {
@@ -237,7 +247,8 @@ public class AdminController {
     /** POST /api/admin/settings/password-reset — update password for a credential key */
     @PostMapping("/api/admin/settings/password-reset")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody Map<String, String> body,
+                                                             HttpSession session) {
         String credKey  = body.get("role");          // field name kept as "role" for backward compat
         String password = body.get("new_password");
         if (credKey == null || credKey.trim().isEmpty())
@@ -247,9 +258,11 @@ public class AdminController {
         // Accept any key that actually exists in the credential store.
         if (secretService.findByUsername(credKey) == null)
             return ResponseEntity.badRequest().body(err("Unknown credential key: '" + credKey + "'."));
+        String actingUser = (String) session.getAttribute("username");
+        if (actingUser == null) actingUser = "admin";
         try {
             secretService.updatePassword(credKey, password);
-            auditService.log("password_reset", "admin", null,
+            auditService.log("password_reset", actingUser, null,
                     "Password reset for credential: " + credKey, "success", "api");
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("message", "Password for '" + credKey + "' updated successfully.");
@@ -264,7 +277,8 @@ public class AdminController {
     /** DELETE /api/admin/files — delete a master file by name */
     @DeleteMapping("/api/admin/files")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> deleteFile(@RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> deleteFile(@RequestBody Map<String, String> body,
+                                                          HttpSession session) {
         String filename = body.get("filename");
         if (filename == null || filename.trim().isEmpty())
             return ResponseEntity.badRequest().body(err("filename is required."));
@@ -291,7 +305,9 @@ public class AdminController {
             appState.setActiveFiles(Collections.<String>emptyList());
             appState.refreshKnownFiles();
 
-            auditService.log("file_deleted", "admin", null, "Deleted file: " + filename, "success", "api");
+            String actingUser = (String) session.getAttribute("username");
+            if (actingUser == null) actingUser = "admin";
+            auditService.log("file_deleted", actingUser, null, "Deleted file: " + filename, "success", "api");
 
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("message", "File '" + filename + "' deleted.");
@@ -320,7 +336,10 @@ public class AdminController {
      */
     @PostMapping("/api/admin/approvals/approve-pc")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> approvePc(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> approvePc(@RequestBody Map<String, Object> body,
+                                                         HttpSession session) {
+        String actingUser = (String) session.getAttribute("username");
+        if (actingUser == null) actingUser = "admin";
         Object raw = body.get("approvals");
         if (!(raw instanceof List))
             return ResponseEntity.badRequest().body(err("approvals must be an array."));
@@ -360,7 +379,7 @@ public class AdminController {
                 reader.evict(Paths.get(appState.getDataDir(), "eIndkomst vacation " + year + ".xlsx")
                         .toAbsolutePath().toString());
                 approved++;
-                auditService.log("pc_approved", "admin", empName,
+                auditService.log("pc_approved", actingUser, empName,
                         "PC→V approved " + startStr + " to " + endStr, "success", "api");
             } catch (Exception e) {
                 errors.add("Failed for " + empName + " (" + startStr + "): " + e.getMessage());

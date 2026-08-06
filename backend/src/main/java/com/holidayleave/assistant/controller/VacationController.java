@@ -56,6 +56,9 @@ public class VacationController {
             }
         }
 
+        String actingUser = (String) session.getAttribute("username");
+        if (actingUser == null) actingUser = "admin";
+
         try {
             List<LeaveRecord> allRecords = loadMasterRecords();
             List<String> empNames = reader.getEmployeeNames(allRecords);
@@ -95,8 +98,6 @@ public class VacationController {
             // is a belt-and-suspenders fallback, not the primary invalidation.
             reader.evict(getMasterPath(record.year()));
 
-            String actingUser = (String) session.getAttribute("username");
-            if (actingUser == null) actingUser = "admin";
             auditService.log("vacation_added", actingUser, resolved,
                 "Added " + days + "d via API", "success", "api");
             syncService.triggerSync();
@@ -112,7 +113,7 @@ public class VacationController {
             return ResponseEntity.status(201).body(resp);
 
         } catch (WorkingExcelWriter.ExcelWriteConflictException e) {
-            auditService.log("vacation_conflict", "admin", empName, e.getMessage(), "error", "api");
+            auditService.log("vacation_conflict", actingUser, empName, e.getMessage(), "error", "api");
             return ResponseEntity.status(409).body(err(e.getMessage()));
         } catch (IOException e) {
             log.error("Add vacation error: {}", e.getMessage(), e);
@@ -200,15 +201,18 @@ public class VacationController {
     }
 
     @PostMapping("/vacation-types")
-    public ResponseEntity<Map<String, Object>> addType(@RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> addType(@RequestBody Map<String, String> body,
+                                                       HttpSession session) {
         String code  = body.get("code");
         String label = body.get("label");
         String color = body.containsKey("color") ? body.get("color") : "FFD3D3D3";
         if (code == null || code.trim().isEmpty() || label == null || label.trim().isEmpty())
             return ResponseEntity.badRequest().body(err("code and label are required."));
+        String actingUser = (String) session.getAttribute("username");
+        if (actingUser == null) actingUser = "admin";
         try {
             VacationType created = typeService.add(new VacationType(code.toUpperCase(), label, color));
-            auditService.log("type_added", "admin", null, "Added vacation type " + code, "success", "api");
+            auditService.log("type_added", actingUser, null, "Added vacation type " + code, "success", "api");
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("message", "Vacation type '" + code + "' added."); r.put("vacation_type", created);
             return ResponseEntity.status(201).body(r);
@@ -220,10 +224,14 @@ public class VacationController {
     }
 
     @PutMapping("/vacation-types/{code}")
-    public ResponseEntity<Map<String, Object>> updateType(@PathVariable String code, @RequestBody Map<String, String> body) {
+    public ResponseEntity<Map<String, Object>> updateType(@PathVariable String code,
+                                                          @RequestBody Map<String, String> body,
+                                                          HttpSession session) {
+        String actingUser = (String) session.getAttribute("username");
+        if (actingUser == null) actingUser = "admin";
         try {
             VacationType updated = typeService.update(code, body.get("label"), body.get("color"));
-            auditService.log("type_updated", "admin", null, "Updated vacation type " + code, "success", "api");
+            auditService.log("type_updated", actingUser, null, "Updated vacation type " + code, "success", "api");
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("message", "Vacation type '" + code + "' updated."); r.put("vacation_type", updated);
             return ResponseEntity.ok(r);
