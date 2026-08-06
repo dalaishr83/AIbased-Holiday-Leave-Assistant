@@ -301,13 +301,17 @@
     function val(id) { return document.getElementById(id).value.trim().toLowerCase(); }
 
     function updateApproveBtn() {
-        var any = tbody.querySelectorAll('.row-check:checked').length > 0;
-        approveBtn.disabled = !any;
-        /* Sync select-all indeterminate state */
-        var visible  = tbody.querySelectorAll('.row-check');
-        var checked  = tbody.querySelectorAll('.row-check:checked');
-        selectAll.indeterminate = checked.length > 0 && checked.length < visible.length;
-        selectAll.checked = visible.length > 0 && checked.length === visible.length;
+        /* Scope entirely to visibleRows so hidden (filtered-out) rows are ignored */
+        var visibleChecks   = visibleRows.map(function (tr) { return tr.querySelector('.row-check'); })
+                                         .filter(Boolean);
+        var checkedCount    = visibleChecks.filter(function (cb) { return cb.checked; }).length;
+        var visibleCount    = visibleChecks.length;
+
+        approveBtn.disabled = checkedCount === 0;
+
+        /* Sync select-all header checkbox state */
+        selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleCount;
+        selectAll.checked       = visibleCount > 0  && checkedCount === visibleCount;
     }
 
     /* ── Filtering ───────────────────────────────────────────────────── */
@@ -423,8 +427,10 @@
 
     /* ── Select-all (visible rows only) ─────────────────────────────── */
     selectAll.addEventListener('change', function () {
-        tbody.querySelectorAll('.row-check').forEach(function (cb) {
-            cb.checked = selectAll.checked;
+        /* Only touch checkboxes belonging to currently visible (filtered) rows */
+        visibleRows.forEach(function (tr) {
+            var cb = tr.querySelector('.row-check');
+            if (cb) cb.checked = selectAll.checked;
         });
         updateApproveBtn();
     });
