@@ -75,6 +75,7 @@
 
     function showWelcomeCard() {
         if (!document.getElementById("welcomeCard")) {
+            const greetingName = messagesEl.getAttribute("data-greeting-name") || "there";
             const card = document.createElement("div");
             card.id = "welcomeCard";
             card.className = "welcome-card";
@@ -105,7 +106,7 @@
                 '<rect x="32" y="122" width="20" height="8" rx="4" fill="#2952cc"/>' +
                 '<rect x="68" y="122" width="20" height="8" rx="4" fill="#2952cc"/>' +
                 '</g></svg></div>' +
-                '<h2 class="welcome-title">Hello! I\'m your Leave Assistant.</h2>' +
+                '<h2 class="welcome-title">Hello, ' + greetingName + '! I\'m your Leave Assistant.</h2>' +
                 '<p class="welcome-sub">Ask me anything about employee holidays and leave—I\'ll answer strictly based<br>' +
                 'on your Excel data. You can also add new leave entries or delete existing ones.<br>' +
                 'To get started, upload your <span class="xlsx-tag">.xlsx</span> file using the sidebar menu.</p>';

@@ -44,7 +44,7 @@
     </div>
 
     <!-- Loaded Employees -->
-    <div class="sidebar-section sidebar-section--employees">
+    <!--<div class="sidebar-section sidebar-section--employees">
         <div class="section-header">
             <span>Loaded Employees</span>
         </div>
@@ -53,17 +53,17 @@
                 <ul id="employeeList" class="employee-list"></ul>
             </div>
         </div>
-    </div>
+    </div>-->
 
     <!-- Quick Questions -->
-    <!--<div class="sidebar-section--quick">
+    <div class="sidebar-section--quick">
         <div class="section-header collapsible" data-target="chipsContent">
             <span>Quick Questions</span><span class="chevron">▾</span>
         </div>
         <div id="chipsContent" class="section-content">
             <div id="quickChips" class="chips"></div>
         </div>
-    </div>-->
+    </div>
 
     <!-- Footer -->
     <div class="sidebar-footer">
@@ -106,7 +106,8 @@
         </div>
     </header>
 
-    <div class="messages" id="messages">
+    <div class="messages" id="messages"
+         th:data-greeting-name="${greetingName} ?: 'there'">
         <div class="welcome-card" id="welcomeCard">
             <div class="welcome-robot">
                 <svg width="90" height="100" viewBox="0 0 120 130" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -134,7 +135,8 @@
                     </g>
                 </svg>
             </div>
-            <h2 class="welcome-title">Hello! I'm your Leave Assistant.</h2>
+            <h2 class="welcome-title"
+                th:text="'Hello, ' + (${greetingName} ?: 'there') + '! I\'m your Leave Assistant.'">Hello! I'm your Leave Assistant.</h2>
             <p class="welcome-sub">
                 Ask me anything about employee holidays and leave—I'll answer strictly based<br>
                 on your Excel data. You can also add new leave entries or delete existing ones.<br>
