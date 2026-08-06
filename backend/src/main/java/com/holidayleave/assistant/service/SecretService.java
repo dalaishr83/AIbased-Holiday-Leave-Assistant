@@ -46,7 +46,8 @@ public class SecretService {
         Files.createDirectories(secretFilePath.getParent());
 
         if (!Files.exists(secretFilePath)) {
-            // First boot — bootstrap admin + legacy employee placeholder.
+            // First boot — bootstrap admin credential only.
+            // Employee accounts are provisioned dynamically when a Master Excel file is uploaded.
             Map<String, Map<String, String>> credentials = new LinkedHashMap<>();
 
             Map<String, String> adminCred = new LinkedHashMap<>();
@@ -59,14 +60,6 @@ public class SecretService {
             adminCred.put("role", "admin");
             adminCred.put("employee_name", null);
             credentials.put(adminUsername, adminCred);
-
-            // Legacy employee placeholder (employee_name=null → ownership checks will block mutations).
-            Map<String, String> empCred = new LinkedHashMap<>();
-            empCred.put("username", "employee");
-            empCred.put("hash", BCrypt.hashpw("employee", BCrypt.gensalt()));
-            empCred.put("role", "employee");
-            empCred.put("employee_name", null);
-            credentials.put("employee", empCred);
 
             save(credentials);
             log.info("SecretService: bootstrapped secret.json");
@@ -106,6 +99,15 @@ public class SecretService {
 
             // Re-key by username (may differ from legacy role key).
             String username = val.getOrDefault("username", key);
+
+            // Evict the legacy placeholder: username="employee" with no real employee_name.
+            // Real employees are provisioned from the Master Excel file and always have
+            // a non-null employee_name, so this check is safe and non-destructive.
+            if ("employee".equals(username) && val.get("employee_name") == null) {
+                log.info("SecretService: evicting legacy 'employee' placeholder during migration");
+                continue;
+            }
+
             migrated.put(username, val);
         }
 
@@ -176,6 +178,30 @@ public class SecretService {
             creds.get(role).put("hash", BCrypt.hashpw(newPassword, BCrypt.gensalt()));
             save(creds);
             log.info("SecretService: password updated for key '{}'", role);
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    /**
+     * Updates only the {@code role} field for the given username key.
+     * All other credential attributes (hash, employee_name, username) are preserved.
+     *
+     * @param username  the key in secret.json (same as the username field)
+     * @param newRole   the new role value, e.g. {@code "admin"} or {@code "employee"}
+     * @throws IllegalArgumentException if the username key does not exist
+     * @throws IOException              if the file cannot be written
+     */
+    public void updateRole(String username, String newRole) throws IOException {
+        writeLock.lock();
+        try {
+            Map<String, Map<String, String>> creds = readCredentials();
+            if (!creds.containsKey(username)) {
+                throw new IllegalArgumentException("Unknown credential key: " + username);
+            }
+            creds.get(username).put("role", newRole);
+            save(creds);
+            log.info("SecretService: role updated for '{}' → '{}'", username, newRole);
         } finally {
             writeLock.unlock();
         }

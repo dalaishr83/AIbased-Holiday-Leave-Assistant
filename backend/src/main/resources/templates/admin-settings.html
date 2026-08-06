@@ -10,9 +10,9 @@
         html, body { overflow: auto; }
 
         .settings-page {
-            max-width: 680px;
+            max-width: 760px;
             margin: 0 auto;
-            padding: 28px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+            padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px));
         }
 
         /* ── Back link + heading ─────────────────────────────────────────── */
@@ -147,14 +147,143 @@
             margin: 0 0 14px 0; line-height: 1.5;
         }
 
+        /* ── Role management dual-panel layout ───────────────────────────── */
+        .rm-layout {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .rm-panel {
+            flex: 1 1 0;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .rm-panel-label {
+            font-size: .78rem;
+            font-weight: 700;
+            color: var(--muted);
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .rm-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            /* viewport-relative height: never taller than ~30 % of the screen,
+               always at least 3 rows tall. Shrinks naturally on small devices. */
+            min-height: 96px;
+            max-height: min(30vh, 220px);
+            overflow-y: auto;
+            background: var(--bg);
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+        .rm-list::-webkit-scrollbar { width: 5px; }
+        .rm-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        .rm-list li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            font-size: .83rem;
+            color: var(--text);
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background .1s;
+        }
+        .rm-list li:last-child { border-bottom: none; }
+        .rm-list li:hover { background: rgba(42,91,215,.06); }
+        .rm-list li.selected { background: rgba(42,91,215,.1); color: var(--accent); font-weight: 600; }
+        .rm-list li .rm-emp-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--muted); flex-shrink: 0;
+            transition: background .1s;
+        }
+        .rm-list li.selected .rm-emp-dot { background: var(--accent); }
+        .rm-list li.admin-item .rm-emp-dot { background: #7c3aed; }
+
+        .rm-list-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 88px;
+            font-size: .8rem;
+            color: var(--muted);
+            font-style: italic;
+            text-align: center;
+            padding: 12px;
+        }
+
+        /* ── Middle controls ─────────────────────────────────────────────── */
+        .rm-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding-top: 24px;   /* visually align with list tops */
+            flex-shrink: 0;
+        }
+
+        .rm-btn {
+            width: 36px; height: 36px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background .12s, border-color .12s, color .12s;
+            font-size: .8rem;
+        }
+        .rm-btn:hover:not(:disabled) {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .rm-btn:disabled {
+            opacity: .35;
+            cursor: not-allowed;
+        }
+        .rm-btn.rm-btn-promote { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .rm-btn.rm-btn-promote:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+        .rm-btn.rm-btn-promote:disabled { background: var(--border); border-color: var(--border); color: var(--muted); }
+
+        /* ── Tablet: stack role management panels vertically ─────────────── */
+        @media (max-width: 600px) {
+            .rm-layout {
+                flex-direction: column;
+            }
+            .rm-controls {
+                flex-direction: row;
+                justify-content: center;
+                padding-top: 0;
+                width: 100%;
+            }
+            .rm-list {
+                max-height: min(25vh, 180px);
+            }
+        }
+
         /* ── Mobile overrides ────────────────────────────────────────────── */
         @media (max-width: 480px) {
-            .settings-page { padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px)); }
-            .settings-page h1 { font-size: 1.15rem; margin-bottom: 14px; }
+            .settings-page { padding: 14px 12px calc(14px + env(safe-area-inset-bottom, 0px)); }
+            .settings-page h1 { font-size: 1.1rem; margin-bottom: 12px; }
             .sc-header { padding: 12px 14px; }
             .sc-body  { padding: 0 14px 14px; }
             .field-row select,
             .field-row input[type=password] { max-width: 100%; }
+            .rm-list { max-height: min(22vh, 160px); }
+            .rm-btn { width: 32px; height: 32px; }
         }
     </style>
 </head>
@@ -253,6 +382,59 @@
         </div>
     </div>
 
+    <!-- ── Card 3: Role Management ───────────────────────────────────────── -->
+    <div class="sc-card" id="card-roles">
+        <div class="sc-header" data-target="card-roles">
+            <div class="sc-header-left">
+                <div class="sc-icon">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div>
+                    <div class="sc-title">Role Management</div>
+                    <div class="sc-subtitle">Promote employees to the Admin role</div>
+                </div>
+            </div>
+            <svg class="sc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div class="sc-body">
+            <div class="sc-body-inner">
+                <p class="sc-desc">Select one or more employees from the left panel and use the arrow button to promote them to the <strong>Admin</strong> role. Promoted employees will appear in the right panel.</p>
+
+                <div class="rm-layout">
+
+                    <!-- Left panel: all employees -->
+                    <div class="rm-panel">
+                        <p class="rm-panel-label">Employees</p>
+                        <ul class="rm-list" id="rmEmployeeList">
+                            <li><span class="rm-list-empty">Loading employees…</span></li>
+                        </ul>
+                    </div>
+
+                    <!-- Middle controls -->
+                    <div class="rm-controls">
+                        <button class="rm-btn rm-btn-promote" id="rmPromoteBtn" disabled title="Promote selected to Admin">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
+                        <button class="rm-btn" id="rmDemoteBtn" disabled title="Remove Admin role">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- Right panel: admins -->
+                    <div class="rm-panel">
+                        <p class="rm-panel-label">Admins</p>
+                        <ul class="rm-list" id="rmAdminList">
+                            <li><span class="rm-list-empty">No admins promoted yet</span></li>
+                        </ul>
+                    </div>
+
+                </div><!-- /.rm-layout -->
+
+                <div class="alert" id="rmAlert" style="margin-top:12px;"></div>
+            </div>
+        </div>
+    </div>
+
 </div><!-- /.settings-page -->
 
 <script>
@@ -267,6 +449,172 @@
             card.classList.toggle('open');
         });
     });
+
+    // ── Role Management widget ────────────────────────────────────────────
+
+    /* In-memory state: arrays of {username, employee_name} */
+    var rmEmployees = [];   /* left panel  — employees not yet promoted */
+    var rmAdmins    = [];   /* right panel — promoted employees */
+
+    var rmEmployeeList = document.getElementById('rmEmployeeList');
+    var rmAdminList    = document.getElementById('rmAdminList');
+    var rmPromoteBtn   = document.getElementById('rmPromoteBtn');
+    var rmDemoteBtn    = document.getElementById('rmDemoteBtn');
+
+    /* Load both panels from the server — single source of truth is secret.json */
+    function rmLoadEmployees() {
+        Promise.all([
+            fetch('/api/admin/settings/employee-credentials').then(function (r) { return r.json(); }),
+            fetch('/api/admin/settings/admin-credentials').then(function (r) { return r.json(); })
+        ])
+        .then(function (results) {
+            rmEmployees = results[0].employees || [];
+            rmAdmins    = results[1].admins    || [];
+            rmRender();
+        })
+        .catch(function () {
+            rmEmployeeList.innerHTML = '<li><span class="rm-list-empty">Failed to load employees</span></li>';
+        });
+    }
+
+    /* Render both panels from state */
+    function rmRender() {
+        rmRenderList(rmEmployeeList, rmEmployees, 'employee');
+        rmRenderList(rmAdminList,    rmAdmins,    'admin');
+        rmSyncButtons();
+    }
+
+    function rmRenderList(ulEl, items, panel) {
+        if (items.length === 0) {
+            var emptyText = panel === 'admin' ? 'No admins promoted yet' : 'No employees loaded';
+            ulEl.innerHTML = '<li><span class="rm-list-empty">' + emptyText + '</span></li>';
+            return;
+        }
+        ulEl.innerHTML = '';
+        items.forEach(function (emp) {
+            var li = document.createElement('li');
+            if (panel === 'admin') li.classList.add('admin-item');
+
+            var dot = document.createElement('span');
+            dot.className = 'rm-emp-dot';
+            li.appendChild(dot);
+
+            var nameSpan = document.createElement('span');
+            nameSpan.textContent = emp.employee_name
+                ? emp.employee_name + ' (' + emp.username + ')'
+                : emp.username;
+            li.appendChild(nameSpan);
+
+            li.addEventListener('click', function () {
+                li.classList.toggle('selected');
+                rmSyncButtons();
+            });
+
+            ulEl.appendChild(li);
+        });
+    }
+
+    function rmSyncButtons() {
+        var empSelected   = rmEmployeeList.querySelectorAll('li.selected').length;
+        var adminSelected = rmAdminList.querySelectorAll('li.selected').length;
+        rmPromoteBtn.disabled = empSelected === 0;
+        rmDemoteBtn.disabled  = adminSelected === 0;
+    }
+
+    /* Collect selected items from a list against a state array */
+    function rmGetSelected(ulEl, stateArr) {
+        var result = [];
+        ulEl.querySelectorAll('li.selected').forEach(function (li) {
+            var idx = Array.prototype.indexOf.call(ulEl.querySelectorAll('li'), li);
+            if (idx >= 0 && idx < stateArr.length) {
+                result.push(stateArr[idx]);
+            }
+        });
+        return result;
+    }
+
+    /* Move selected items from left → right, persisted to secret.json */
+    rmPromoteBtn.addEventListener('click', function () {
+        var toPromote = rmGetSelected(rmEmployeeList, rmEmployees);
+        if (toPromote.length === 0) return;
+
+        rmPromoteBtn.disabled = true;
+        rmDemoteBtn.disabled  = true;
+
+        var usernames = toPromote.map(function (e) { return e.username; });
+
+        fetch('/api/admin/settings/promote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usernames: usernames })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.error) {
+                rmShowAlert('rmAlert', data.error, false);
+                rmSyncButtons();
+            } else {
+                /* Reload both panels from server to reflect persisted state */
+                var msg = data.message;
+                if (data.errors && data.errors.length) {
+                    msg += ' Errors: ' + data.errors.join('; ');
+                }
+                rmLoadEmployees();
+                rmShowAlert('rmAlert', msg, true);
+            }
+        })
+        .catch(function () {
+            rmShowAlert('rmAlert', 'Request failed. Role change not saved.', false);
+            rmSyncButtons();
+        });
+    });
+
+    /* Move selected items from right → left, persisted to secret.json */
+    rmDemoteBtn.addEventListener('click', function () {
+        var toDemote = rmGetSelected(rmAdminList, rmAdmins);
+        if (toDemote.length === 0) return;
+
+        rmPromoteBtn.disabled = true;
+        rmDemoteBtn.disabled  = true;
+
+        var usernames = toDemote.map(function (e) { return e.username; });
+
+        fetch('/api/admin/settings/demote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ usernames: usernames })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.error) {
+                rmShowAlert('rmAlert', data.error, false);
+                rmSyncButtons();
+            } else {
+                /* Reload both panels from server to reflect persisted state */
+                var msg = data.message;
+                if (data.errors && data.errors.length) {
+                    msg += ' Errors: ' + data.errors.join('; ');
+                }
+                rmLoadEmployees();
+                rmShowAlert('rmAlert', msg, true);
+            }
+        })
+        .catch(function () {
+            rmShowAlert('rmAlert', 'Request failed. Role change not saved.', false);
+            rmSyncButtons();
+        });
+    });
+
+    function rmShowAlert(id, msg, success) {
+        var el = document.getElementById(id);
+        el.textContent = msg;
+        el.className = 'alert ' + (success ? 'success' : 'error');
+        el.style.display = 'block';
+        setTimeout(function () { el.style.display = 'none'; }, 5000);
+    }
+
+    /* Load on page ready */
+    rmLoadEmployees();
 
     // ── Load employee credentials into the dropdown on page load ──────────
     function loadEmployeeDropdown() {

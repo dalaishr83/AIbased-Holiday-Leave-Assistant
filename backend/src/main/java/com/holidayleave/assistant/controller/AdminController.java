@@ -135,6 +135,105 @@ public class AdminController {
         return ResponseEntity.ok(r);
     }
 
+    /**
+     * GET /api/admin/settings/admin-credentials
+     * Returns [{username, employee_name}] for every admin-role credential entry
+     * that represents a real employee (employee_name is non-null).
+     * Used by the Role Management widget to pre-populate the right-hand Admins panel.
+     */
+    @GetMapping("/api/admin/settings/admin-credentials")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> getAdminCredentials() {
+        Map<String, Map<String, String>> all = secretService.readCredentials();
+        List<Map<String, String>> result = new ArrayList<>();
+        for (Map<String, String> entry : all.values()) {
+            if ("admin".equals(entry.get("role")) && entry.get("employee_name") != null) {
+                Map<String, String> item = new LinkedHashMap<>();
+                item.put("username",      entry.get("username"));
+                item.put("employee_name", entry.get("employee_name"));
+                result.add(item);
+            }
+        }
+        result.sort((a, b) -> {
+            String na = a.get("employee_name"); String nb = b.get("employee_name");
+            if (na == null) na = ""; if (nb == null) nb = "";
+            return na.compareToIgnoreCase(nb);
+        });
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("admins", result);
+        return ResponseEntity.ok(r);
+    }
+
+    /**
+     * POST /api/admin/settings/promote
+     * Body: { "usernames": ["dayananda", "..."] }
+     * Sets role = "admin" for each listed username in secret.json.
+     * Only the role field is modified; hash and all other attributes are preserved.
+     */
+    @PostMapping("/api/admin/settings/promote")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> promoteToAdmin(@RequestBody Map<String, Object> body) {
+        return updateRoles(body, "admin", "promote");
+    }
+
+    /**
+     * POST /api/admin/settings/demote
+     * Body: { "usernames": ["dayananda", "..."] }
+     * Sets role = "employee" for each listed username in secret.json.
+     * Only the role field is modified; hash and all other attributes are preserved.
+     */
+    @PostMapping("/api/admin/settings/demote")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> demoteToEmployee(@RequestBody Map<String, Object> body) {
+        return updateRoles(body, "employee", "demote");
+    }
+
+    /** Shared helper — updates the role field for a batch of usernames. */
+    private ResponseEntity<Map<String, Object>> updateRoles(
+            Map<String, Object> body, String newRole, String action) {
+
+        Object raw = body.get("usernames");
+        if (!(raw instanceof List)) {
+            return ResponseEntity.badRequest().body(err("usernames must be an array of username strings."));
+        }
+
+        List<String> usernames = new ArrayList<>();
+        for (Object o : (List<?>) raw) usernames.add(String.valueOf(o));
+
+        if (usernames.isEmpty()) {
+            return ResponseEntity.badRequest().body(err("usernames must not be empty."));
+        }
+
+        List<String> errors = new ArrayList<>();
+        int updated = 0;
+
+        for (String username : usernames) {
+            if (secretService.findByUsername(username) == null) {
+                errors.add("Unknown username: '" + username + "'");
+                continue;
+            }
+            try {
+                secretService.updateRole(username, newRole);
+                auditService.log("role_" + action, "admin", username,
+                        "Role updated to '" + newRole + "' for user: " + username, "success", "api");
+                updated++;
+            } catch (IOException e) {
+                errors.add("Failed for '" + username + "': " + e.getMessage());
+            }
+        }
+
+        if (updated == 0) {
+            return ResponseEntity.badRequest().body(err(
+                    errors.isEmpty() ? "No users updated." : String.join("; ", errors)));
+        }
+
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("updated", updated);
+        r.put("errors",  errors);
+        r.put("message", updated + " user(s) role set to '" + newRole + "'.");
+        return ResponseEntity.ok(r);
+    }
+
     /** POST /api/admin/settings/password-reset — update password for a credential key */
     @PostMapping("/api/admin/settings/password-reset")
     @ResponseBody
