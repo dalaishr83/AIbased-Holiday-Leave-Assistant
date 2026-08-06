@@ -199,7 +199,6 @@
             <!-- Filter toolbar -->
             <div class="filter-toolbar" id="filterToolbar">
                 <input type="text"   id="fEmployee"    placeholder="Employee name…">
-                <input type="text"   id="fHolidayType" placeholder="Holiday type…">
                 <input type="text"   id="fStartDate"   placeholder="Start date… (e.g. 2026)">
                 <input type="text"   id="fEndDate"     placeholder="End date…">
                 <input type="number" id="fDays"        placeholder="Days">
@@ -317,16 +316,14 @@
     /* ── Filtering ───────────────────────────────────────────────────── */
     function applyFilters() {
         var fEmp     = val('fEmployee');
-        var fHolType = val('fHolidayType');
         var fStart   = val('fStartDate');
         var fEnd     = val('fEndDate');
         var fDays    = val('fDays');
         var fYear    = val('fYear');
 
         visibleRows = allRows.filter(function (tr) {
-            if (fEmp     && tr.getAttribute('data-employee').toLowerCase().indexOf(fEmp)         === -1) return false;
-            if (fHolType && (tr.getAttribute('data-holiday-type') || '').toLowerCase().indexOf(fHolType) === -1) return false;
-            if (fStart   && tr.getAttribute('data-start').toLowerCase().indexOf(fStart)           === -1) return false;
+            if (fEmp     && tr.getAttribute('data-employee').toLowerCase().indexOf(fEmp)   === -1) return false;
+            if (fStart   && tr.getAttribute('data-start').toLowerCase().indexOf(fStart)     === -1) return false;
             if (fEnd     && tr.getAttribute('data-end').toLowerCase().indexOf(fEnd)               === -1) return false;
             if (fDays    && tr.getAttribute('data-days').toLowerCase().indexOf(fDays)             === -1) return false;
             if (fYear    && tr.getAttribute('data-year').toLowerCase().indexOf(fYear)             === -1) return false;
@@ -442,13 +439,13 @@
     });
 
     /* ── Filter listeners ────────────────────────────────────────────── */
-    ['fEmployee', 'fHolidayType', 'fStartDate', 'fEndDate', 'fDays', 'fYear'].forEach(function (id) {
+    ['fEmployee', 'fStartDate', 'fEndDate', 'fDays', 'fYear'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.addEventListener('input', applyFilters);
     });
 
     document.getElementById('btnClearFilters').addEventListener('click', function () {
-        ['fEmployee', 'fHolidayType', 'fStartDate', 'fEndDate', 'fDays', 'fYear'].forEach(function (id) {
+        ['fEmployee', 'fStartDate', 'fEndDate', 'fDays', 'fYear'].forEach(function (id) {
             document.getElementById(id).value = '';
         });
         applyFilters();
