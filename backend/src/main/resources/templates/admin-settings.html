@@ -59,25 +59,67 @@
     <!-- Password Reset -->
     <div class="settings-card">
         <h2>Password Reset</h2>
+
+        <!-- Admin account -->
+        <h3 style="font-size:.85rem;font-weight:700;color:var(--text);margin:0 0 10px 0;">Admin Account</h3>
         <div class="field-row">
-            <label for="roleSelect">Role</label>
-            <select id="roleSelect">
-                <option value="admin">Admin</option>
-                <option value="employee">Employee</option>
+            <label for="adminNewPassword">New Password (min 6 chars)</label>
+            <input type="password" id="adminNewPassword" placeholder="Enter new admin password" autocomplete="new-password">
+        </div>
+        <button class="btn-save" id="resetAdminPasswordBtn">Reset Admin Password</button>
+        <div class="alert" id="adminPasswordAlert"></div>
+
+        <hr style="border:none;border-top:1px solid var(--border);margin:20px 0;">
+
+        <!-- Employee accounts -->
+        <h3 style="font-size:.85rem;font-weight:700;color:var(--text);margin:0 0 10px 0;">Employee Account</h3>
+        <div class="field-row">
+            <label for="employeeSelect">Employee</label>
+            <select id="employeeSelect">
+                <option value="">— Loading employees… —</option>
             </select>
         </div>
         <div class="field-row">
-            <label for="newPassword">New Password (min 6 chars)</label>
-            <input type="password" id="newPassword" placeholder="Enter new password" autocomplete="new-password">
+            <label for="employeeNewPassword">New Password (min 6 chars)</label>
+            <input type="password" id="employeeNewPassword" placeholder="Enter new employee password" autocomplete="new-password">
         </div>
-        <button class="btn-save" id="resetPasswordBtn">Reset Password</button>
-        <div class="alert" id="passwordAlert"></div>
+        <button class="btn-save" id="resetEmployeePasswordBtn">Reset Employee Password</button>
+        <div class="alert" id="employeePasswordAlert"></div>
     </div>
 </div>
 
 <script>
 (function () {
-    // Save restricted types
+    // ── Load employee credentials into the dropdown on page load ──────────────
+    function loadEmployeeDropdown() {
+        fetch('/api/admin/settings/employee-credentials')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                var sel = document.getElementById('employeeSelect');
+                var employees = data.employees || [];
+                sel.innerHTML = '';
+                if (employees.length === 0) {
+                    sel.innerHTML = '<option value="">— No employees loaded —</option>';
+                    return;
+                }
+                sel.innerHTML = '<option value="">— Select an employee —</option>';
+                employees.forEach(function (emp) {
+                    var opt = document.createElement('option');
+                    opt.value = emp.username;
+                    opt.textContent = emp.employee_name
+                        ? emp.employee_name + ' (' + emp.username + ')'
+                        : emp.username;
+                    sel.appendChild(opt);
+                });
+            })
+            .catch(function () {
+                document.getElementById('employeeSelect').innerHTML =
+                    '<option value="">— Failed to load employees —</option>';
+            });
+    }
+    loadEmployeeDropdown();
+
+    // ── Save restricted types ─────────────────────────────────────────────────
     document.getElementById('saveRestrictedBtn').addEventListener('click', function () {
         var checked = [];
         document.querySelectorAll('.type-toggle:checked').forEach(function (cb) {
@@ -92,22 +134,43 @@
         }).catch(function () { showAlert('restrictedAlert', 'Request failed.', false); });
     });
 
-    // Reset password
-    document.getElementById('resetPasswordBtn').addEventListener('click', function () {
-        var role = document.getElementById('roleSelect').value;
-        var pwd  = document.getElementById('newPassword').value;
+    // ── Reset admin password ──────────────────────────────────────────────────
+    document.getElementById('resetAdminPasswordBtn').addEventListener('click', function () {
+        var pwd = document.getElementById('adminNewPassword').value;
         if (!pwd || pwd.length < 6) {
-            showAlert('passwordAlert', 'Password must be at least 6 characters.', false);
+            showAlert('adminPasswordAlert', 'Password must be at least 6 characters.', false);
             return;
         }
         fetch('/api/admin/settings/password-reset', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ role: role, new_password: pwd })
+            body: JSON.stringify({ role: 'admin', new_password: pwd })
         }).then(function (r) { return r.json(); }).then(function (data) {
-            showAlert('passwordAlert', data.error ? data.error : data.message, !data.error);
-            if (!data.error) document.getElementById('newPassword').value = '';
-        }).catch(function () { showAlert('passwordAlert', 'Request failed.', false); });
+            showAlert('adminPasswordAlert', data.error ? data.error : data.message, !data.error);
+            if (!data.error) document.getElementById('adminNewPassword').value = '';
+        }).catch(function () { showAlert('adminPasswordAlert', 'Request failed.', false); });
+    });
+
+    // ── Reset employee password ───────────────────────────────────────────────
+    document.getElementById('resetEmployeePasswordBtn').addEventListener('click', function () {
+        var username = document.getElementById('employeeSelect').value;
+        var pwd      = document.getElementById('employeeNewPassword').value;
+        if (!username) {
+            showAlert('employeePasswordAlert', 'Please select an employee.', false);
+            return;
+        }
+        if (!pwd || pwd.length < 6) {
+            showAlert('employeePasswordAlert', 'Password must be at least 6 characters.', false);
+            return;
+        }
+        fetch('/api/admin/settings/password-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ role: username, new_password: pwd })
+        }).then(function (r) { return r.json(); }).then(function (data) {
+            showAlert('employeePasswordAlert', data.error ? data.error : data.message, !data.error);
+            if (!data.error) document.getElementById('employeeNewPassword').value = '';
+        }).catch(function () { showAlert('employeePasswordAlert', 'Request failed.', false); });
     });
 
     function showAlert(id, msg, success) {

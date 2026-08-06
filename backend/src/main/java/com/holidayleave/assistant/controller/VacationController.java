@@ -6,6 +6,7 @@ import com.holidayleave.assistant.model.LeaveRecord;
 import com.holidayleave.assistant.model.VacationType;
 import com.holidayleave.assistant.service.*;
 import com.holidayleave.assistant.service.RestrictedVacationTypeService;
+import javax.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +35,8 @@ public class VacationController {
     @Autowired private SyncService syncService;
 
     @PostMapping("/vacations")
-    public ResponseEntity<Map<String, Object>> addVacation(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> addVacation(@RequestBody Map<String, Object> body,
+                                                           HttpSession session) {
         String empName   = (String) body.get("employee_name");
         String leaveType = (String) body.get("leave_type");
         String startStr  = (String) body.get("start_date");
@@ -43,6 +45,16 @@ public class VacationController {
 
         if (empName == null || empName.trim().isEmpty())
             return ResponseEntity.badRequest().body(err("employee_name is required."));
+
+        // ── Employee ownership guard ───────────────────────────────────────────
+        String actingRole = (String) session.getAttribute("role");
+        String actingEmp  = (String) session.getAttribute("employee_name");
+        if ("employee".equals(actingRole)) {
+            if (actingEmp == null || !actingEmp.equalsIgnoreCase(empName)) {
+                return ResponseEntity.status(403)
+                        .body(err("You are not permitted to add vacations for other employees."));
+            }
+        }
 
         try {
             List<LeaveRecord> allRecords = loadMasterRecords();
@@ -83,7 +95,9 @@ public class VacationController {
             // is a belt-and-suspenders fallback, not the primary invalidation.
             reader.evict(getMasterPath(record.year()));
 
-            auditService.log("vacation_added", "admin", resolved,
+            String actingUser = (String) session.getAttribute("username");
+            if (actingUser == null) actingUser = "admin";
+            auditService.log("vacation_added", actingUser, resolved,
                 "Added " + days + "d via API", "success", "api");
             syncService.triggerSync();
 
@@ -107,7 +121,8 @@ public class VacationController {
     }
 
     @DeleteMapping("/vacations")
-    public ResponseEntity<Map<String, Object>> deleteVacation(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String, Object>> deleteVacation(@RequestBody Map<String, Object> body,
+                                                              HttpSession session) {
         String empName  = (String) body.get("employee_name");
         String startStr = (String) body.get("start_date");
         String endStr   = (String) body.get("end_date");
@@ -115,6 +130,16 @@ public class VacationController {
 
         if (empName == null || empName.trim().isEmpty())
             return ResponseEntity.badRequest().body(err("employee_name is required."));
+
+        // ── Employee ownership guard ───────────────────────────────────────────
+        String actingRole = (String) session.getAttribute("role");
+        String actingEmp  = (String) session.getAttribute("employee_name");
+        if ("employee".equals(actingRole)) {
+            if (actingEmp == null || !actingEmp.equalsIgnoreCase(empName)) {
+                return ResponseEntity.status(403)
+                        .body(err("You are not permitted to delete another employee's vacation."));
+            }
+        }
 
         try {
             List<LeaveRecord> allRecords = loadMasterRecords();
@@ -146,7 +171,9 @@ public class VacationController {
             // Eager cache eviction after confirmed delete.
             reader.evict(getMasterPath(start.getYear()));
 
-            auditService.log("vacation_deleted", "admin", resolved, "Deleted vacation via API", "success", "api");
+            String actingUser = (String) session.getAttribute("username");
+            if (actingUser == null) actingUser = "admin";
+            auditService.log("vacation_deleted", actingUser, resolved, "Deleted vacation via API", "success", "api");
             syncService.triggerSync();
 
             Map<String, Object> recMap = new LinkedHashMap<>();

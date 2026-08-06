@@ -9,16 +9,19 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 /**
  * Handles GET /login, POST /login, GET /logout.
  *
- * Credentials are loaded from SecretService (file-backed JSON).
+ * Credentials are loaded from SecretService (file-backed JSON, username-keyed).
  * On successful login the session receives:
- *   - logged_in = true
- *   - role      = "admin" | "employee"
- *   - session_id = random UUID (used for pending-vacation keying)
+ *   - logged_in     = true
+ *   - role          = "admin" | "employee"
+ *   - username      = the credential username (used for accurate audit logging)
+ *   - employee_name = the full Excel name, or null for admin
+ *   - session_id    = random UUID (used for pending-vacation keying)
  */
 @Controller
 public class AuthController {
@@ -41,12 +44,14 @@ public class AuthController {
                           HttpSession session,
                           Model model) {
 
-        String matchedRole = resolveRole(username, password);
+        Map<String, String> entry = resolveEntry(username, password);
 
-        if (matchedRole != null) {
-            session.setAttribute("logged_in",  true);
-            session.setAttribute("role",        matchedRole);
-            session.setAttribute("session_id",  UUID.randomUUID().toString().replace("-", ""));
+        if (entry != null) {
+            session.setAttribute("logged_in",     true);
+            session.setAttribute("role",          entry.get("role"));
+            session.setAttribute("username",      entry.get("username"));
+            session.setAttribute("employee_name", entry.get("employee_name")); // null for admin
+            session.setAttribute("session_id",    UUID.randomUUID().toString().replace("-", ""));
             return "redirect:/";
         }
 
@@ -61,19 +66,19 @@ public class AuthController {
     }
 
     /**
-     * Tries to match the submitted credentials against each role in secret.json.
-     * Returns the matched role name ("admin" or "employee"), or null if none match.
+     * Looks up the submitted username directly in the credential store and verifies
+     * the password with BCrypt. Returns the matching credential entry map, or null.
      */
-    private String resolveRole(String username, String password) {
-        for (String role : new String[]{"admin", "employee"}) {
-            String storedUsername = secretService.getUsername(role);
-            String storedHash     = secretService.getHash(role);
-            if (storedUsername == null || storedHash == null) continue;
-            if (!timingSafeEquals(username, storedUsername)) continue;
-            try {
-                if (BCrypt.checkpw(password, storedHash)) return role;
-            } catch (Exception ignored) {}
-        }
+    private Map<String, String> resolveEntry(String username, String password) {
+        Map<String, String> entry = secretService.findByUsername(username);
+        if (entry == null) return null;
+        String storedUsername = entry.get("username");
+        String storedHash     = entry.get("hash");
+        if (storedUsername == null || storedHash == null) return null;
+        if (!timingSafeEquals(username, storedUsername)) return null;
+        try {
+            if (BCrypt.checkpw(password, storedHash)) return entry;
+        } catch (Exception ignored) {}
         return null;
     }
 

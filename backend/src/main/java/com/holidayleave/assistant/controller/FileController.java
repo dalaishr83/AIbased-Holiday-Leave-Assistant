@@ -4,6 +4,9 @@ import com.holidayleave.assistant.excel.PlannerExcelReader;
 import com.holidayleave.assistant.model.FileInfo;
 import com.holidayleave.assistant.model.LeaveRecord;
 import com.holidayleave.assistant.service.AppState;
+import com.holidayleave.assistant.service.AuditService;
+import com.holidayleave.assistant.service.SecretService;
+import javax.servlet.http.HttpSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,9 +27,12 @@ public class FileController {
 
     @Autowired private AppState appState;
     @Autowired private PlannerExcelReader reader;
+    @Autowired private SecretService secretService;
+    @Autowired private AuditService auditService;
 
     @PostMapping("/upload")
-    public ResponseEntity<Map<String, Object>> upload(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<Map<String, Object>> upload(@RequestParam("file") MultipartFile file,
+                                                      HttpSession session) {
         if (file.isEmpty()) return ResponseEntity.badRequest().body(err("No file field in request"));
         String originalName = file.getOriginalFilename();
         if (originalName == null || !originalName.toLowerCase().endsWith(".xlsx")) {
@@ -73,11 +79,27 @@ public class FileController {
             appState.setActiveFiles(Collections.singletonList(masterPath.toString()));
             appState.refreshKnownFiles();
 
+            // Auto-provision login credentials for each employee in the uploaded file.
+            String actingUser = (String) session.getAttribute("username");
+            if (actingUser == null) actingUser = "admin";
+            List<String> provisioned = new ArrayList<>();
+            for (String emp : employees) {
+                try {
+                    String uname = secretService.provisionEmployee(emp);
+                    provisioned.add(emp + " → " + uname);
+                    auditService.log("employee_provisioned", actingUser, emp,
+                            "Credential created: " + uname, "success", "api");
+                } catch (Exception e) {
+                    log.warn("Provisioning failed for '{}': {}", emp, e.getMessage());
+                }
+            }
+
             Map<String, Object> r = new LinkedHashMap<>();
-            r.put("message",   "File loaded as '" + canonicalName + "'. " + employees.size() + " employee(s) found.");
-            r.put("employees", employees);
-            r.put("filename",  canonicalName);
-            r.put("files",     appState.getKnownFiles());
+            r.put("message",              "File loaded as '" + canonicalName + "'. " + employees.size() + " employee(s) found.");
+            r.put("employees",            employees);
+            r.put("filename",             canonicalName);
+            r.put("files",                appState.getKnownFiles());
+            r.put("provisioned_employees", provisioned);
             return ResponseEntity.ok(r);
         } catch (IOException e) {
             log.error("Upload failed: {}", e.getMessage(), e);

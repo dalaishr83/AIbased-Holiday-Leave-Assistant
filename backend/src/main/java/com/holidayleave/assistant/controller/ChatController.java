@@ -52,20 +52,55 @@ public class ChatController {
 
             PendingVacation pending = appState.getPendingVacation(sessionId);
             if (pending != null && "delete".equals(pending.getWizardType())) {
-                return handleDeleteWizard(pending, message, sessionId, allRecords, employeeNames);
+                return handleDeleteWizard(pending, message, sessionId, allRecords, employeeNames, session);
             }
             if (pending != null && "add".equals(pending.getWizardType())) {
-                return handleAddWizard(pending, message, sessionId, allRecords, employeeNames);
+                return handleAddWizard(pending, message, sessionId, allRecords, employeeNames, session);
             }
             if (agent.isAddVacationIntent(message)) {
+                String sessionRole = (String) session.getAttribute("role");
+                String sessionEmp  = (String) session.getAttribute("employee_name");
+                // For employee role: if the message names a different employee, reject
+                // immediately with a clear authorization message before the wizard starts.
+                if ("employee".equals(sessionRole) && sessionEmp != null) {
+                    String mentionedEmp = agent.resolveEmployeeName(message, allRecords);
+                    if (mentionedEmp != null && !mentionedEmp.equalsIgnoreCase(sessionEmp)) {
+                        return ResponseEntity.ok(reply(
+                            "Cannot add: **" + mentionedEmp + "** can only modify their own vacation details. Request aborted.",
+                            "text"));
+                    }
+                }
                 PendingVacation pv = new PendingVacation("add");
+                // Pre-seed the employee name so the wizard skips the "Which employee?" step
+                // and goes straight to leave-type selection.
+                if ("employee".equals(sessionRole) && sessionEmp != null) {
+                    pv.setEmployeeName(sessionEmp);
+                    pv.setState(PendingVacation.WizardState.NEED_TYPE);
+                }
                 VacationCreationService.WizardResult result = creationService.process(pv, message, employeeNames);
                 if (result.cancelled()) appState.removePendingVacation(sessionId);
                 else if (!result.confirmed()) appState.setPendingVacation(sessionId, pv);
                 return ResponseEntity.ok(reply(result.reply(), result.type()));
             }
             if (agent.isDeleteVacationIntent(message)) {
+                String sessionRole = (String) session.getAttribute("role");
+                String sessionEmp  = (String) session.getAttribute("employee_name");
+                // For employee role: if the message names a different employee, reject
+                // immediately with a clear authorization message before the wizard starts.
+                if ("employee".equals(sessionRole) && sessionEmp != null) {
+                    String mentionedEmp = agent.resolveEmployeeName(message, allRecords);
+                    if (mentionedEmp != null && !mentionedEmp.equalsIgnoreCase(sessionEmp)) {
+                        return ResponseEntity.ok(reply(
+                            "Cannot delete: **" + mentionedEmp + "** can only modify their own vacation details. Deletion aborted.",
+                            "text"));
+                    }
+                }
                 PendingVacation pv = new PendingVacation("delete");
+                // Pre-seed the employee name and skip to date entry.
+                if ("employee".equals(sessionRole) && sessionEmp != null) {
+                    pv.setEmployeeName(sessionEmp);
+                    pv.setState(PendingVacation.WizardState.DELETE_NEED_START);
+                }
                 VacationDeletionService.WizardResult result = deletionService.process(pv, message, employeeNames, allRecords);
                 if (result.cancelled()) appState.removePendingVacation(sessionId);
                 else if (!result.confirmed()) appState.setPendingVacation(sessionId, pv);
@@ -108,9 +143,20 @@ public class ChatController {
 
     private ResponseEntity<Map<String, Object>> handleAddWizard(
             PendingVacation pending, String message, String sessionId,
-            List<LeaveRecord> allRecords, List<String> employeeNames) throws IOException {
+            List<LeaveRecord> allRecords, List<String> employeeNames,
+            HttpSession session) throws IOException {
         VacationCreationService.WizardResult result = creationService.process(pending, message, employeeNames);
         if (result.confirmed()) {
+            // ── Belt-and-suspenders ownership check before write ──────────────
+            String sessionRole = (String) session.getAttribute("role");
+            String sessionEmp  = (String) session.getAttribute("employee_name");
+            if ("employee".equals(sessionRole)) {
+                if (sessionEmp == null || !sessionEmp.equalsIgnoreCase(pending.getEmployeeName())) {
+                    appState.removePendingVacation(sessionId);
+                    return ResponseEntity.status(403).body(err(
+                            "You are not permitted to add vacations for other employees."));
+                }
+            }
             VacationType vtype = typeService.findByCode(pending.getLeaveCode())
                     .orElseThrow(() -> new IllegalArgumentException("Leave type not found"));
             LeaveRecord record = new LeaveRecord(
@@ -122,7 +168,9 @@ public class ChatController {
             // Eager cache eviction — master not yet updated by sync-daemon but evicting
             // now ensures the next read re-parses from disk (consistent with master).
             reader.evict(getMasterPath(record.year()));
-            auditService.log("vacation_added", "admin", record.employeeName(),
+            String actingUser = (String) session.getAttribute("username");
+            if (actingUser == null) actingUser = "admin";
+            auditService.log("vacation_added", actingUser, record.employeeName(),
                 "Added " + record.days() + "d [" + record.leaveType() + "] via chat", "success", "chat");
             syncService.triggerSync();
             appState.removePendingVacation(sessionId);
@@ -136,16 +184,29 @@ public class ChatController {
 
     private ResponseEntity<Map<String, Object>> handleDeleteWizard(
             PendingVacation pending, String message, String sessionId,
-            List<LeaveRecord> allRecords, List<String> employeeNames) throws IOException {
+            List<LeaveRecord> allRecords, List<String> employeeNames,
+            HttpSession session) throws IOException {
         VacationDeletionService.WizardResult result = deletionService.process(pending, message, employeeNames, allRecords);
         if (result.confirmed()) {
+            // ── Belt-and-suspenders ownership check before write ──────────────
+            String sessionRole = (String) session.getAttribute("role");
+            String sessionEmp  = (String) session.getAttribute("employee_name");
+            if ("employee".equals(sessionRole)) {
+                if (sessionEmp == null || !sessionEmp.equalsIgnoreCase(pending.getEmployeeName())) {
+                    appState.removePendingVacation(sessionId);
+                    return ResponseEntity.status(403).body(err(
+                            "You are not permitted to delete another employee's vacation."));
+                }
+            }
             String workingPath = getWorkingPath(pending.getStartDate().getYear());
             ensureWorkingCopy(workingPath, pending.getStartDate().getYear());
             int cleared = writer.deleteVacation(workingPath, pending.getEmployeeName(),
                     pending.getStartDate(), pending.getEndDate());
             // Eager cache eviction after confirmed delete.
             reader.evict(getMasterPath(pending.getStartDate().getYear()));
-            auditService.log("vacation_deleted", "admin", pending.getEmployeeName(),
+            String actingUser = (String) session.getAttribute("username");
+            if (actingUser == null) actingUser = "admin";
+            auditService.log("vacation_deleted", actingUser, pending.getEmployeeName(),
                 "Deleted vacation via chat", "success", "chat");
             syncService.triggerSync();
             appState.removePendingVacation(sessionId);

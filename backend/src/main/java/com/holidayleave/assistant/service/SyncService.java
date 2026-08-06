@@ -34,6 +34,7 @@ public class SyncService {
     @Autowired private WorkingExcelWriter writer;
     @Autowired private PlannerExcelReader reader;
     @Autowired private BoxSyncService boxSyncService;
+    @Autowired private AuditService auditService;
 
     private Thread syncThread;
     private volatile boolean running = false;
@@ -141,6 +142,9 @@ public class SyncService {
                         }
                         synced.add(workingFile.getName());
                         log.info("Synced {} -> {}", workingFile.getName(), masterFile.getPath());
+                        auditService.log("working_synced_to_master", "system", null,
+                                "Synced working copy to master: " + workingFile.getName(),
+                                "success", "system");
                         // Confirmed eviction: master file was atomically replaced.
                         // Belt-and-suspenders alongside the eager eviction fired by the
                         // controller immediately after the working copy was written.

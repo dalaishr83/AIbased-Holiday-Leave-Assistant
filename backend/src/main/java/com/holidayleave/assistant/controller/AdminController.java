@@ -106,24 +106,54 @@ public class AdminController {
         }
     }
 
-    /** POST /api/admin/settings/password-reset — update password for a role */
+    /**
+     * GET /api/admin/settings/employee-credentials
+     * Returns [{username, employee_name}] for every employee-role credential entry.
+     * Used by the Settings page to populate the employee password-reset dropdown.
+     */
+    @GetMapping("/api/admin/settings/employee-credentials")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> getEmployeeCredentials() {
+        Map<String, Map<String, String>> all = secretService.readCredentials();
+        List<Map<String, String>> result = new ArrayList<>();
+        for (Map<String, String> entry : all.values()) {
+            if ("employee".equals(entry.get("role"))) {
+                Map<String, String> item = new LinkedHashMap<>();
+                item.put("username",      entry.get("username"));
+                item.put("employee_name", entry.get("employee_name"));
+                result.add(item);
+            }
+        }
+        // Sort by employee_name for a predictable dropdown order.
+        result.sort((a, b) -> {
+            String na = a.get("employee_name"); String nb = b.get("employee_name");
+            if (na == null) na = ""; if (nb == null) nb = "";
+            return na.compareToIgnoreCase(nb);
+        });
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("employees", result);
+        return ResponseEntity.ok(r);
+    }
+
+    /** POST /api/admin/settings/password-reset — update password for a credential key */
     @PostMapping("/api/admin/settings/password-reset")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> resetPassword(@RequestBody Map<String, String> body) {
-        String role     = body.get("role");
+        String credKey  = body.get("role");          // field name kept as "role" for backward compat
         String password = body.get("new_password");
-        if (role == null || role.trim().isEmpty())
+        if (credKey == null || credKey.trim().isEmpty())
             return ResponseEntity.badRequest().body(err("role is required."));
         if (password == null || password.length() < 6)
             return ResponseEntity.badRequest().body(err("new_password must be at least 6 characters."));
-        if (!role.equals("admin") && !role.equals("employee"))
-            return ResponseEntity.badRequest().body(err("role must be 'admin' or 'employee'."));
+        // Accept any key that actually exists in the credential store.
+        if (secretService.findByUsername(credKey) == null)
+            return ResponseEntity.badRequest().body(err("Unknown credential key: '" + credKey + "'."));
         try {
-            secretService.updatePassword(role, password);
+            secretService.updatePassword(credKey, password);
             auditService.log("password_reset", "admin", null,
-                    "Password reset for role: " + role, "success", "api");
+                    "Password reset for credential: " + credKey, "success", "api");
             Map<String, Object> r = new LinkedHashMap<>();
-            r.put("message", "Password for role '" + role + "' updated successfully.");
+            r.put("message", "Password for '" + credKey + "' updated successfully.");
             return ResponseEntity.ok(r);
         } catch (IOException e) {
             return ResponseEntity.status(500).body(err("Failed to update password: " + e.getMessage()));

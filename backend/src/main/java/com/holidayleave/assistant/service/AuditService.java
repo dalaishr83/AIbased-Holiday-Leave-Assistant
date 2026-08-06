@@ -11,8 +11,12 @@ import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -41,17 +45,39 @@ public class AuditService {
 
     @PostConstruct
     public void init() throws IOException {
-        auditFilePath = Paths.get(props.getDataDir(), "audit.log");
+        String dataDir = resolveDataDir(props.getDataDir());
+        auditFilePath  = Paths.get(dataDir, "audit.log");
         Files.createDirectories(auditFilePath.getParent());
+    }
+
+    /**
+     * Mirrors AppState.resolve() — anchors relative DATA_DIR values to the
+     * app.base.dir system property (project root) rather than the JVM working
+     * directory, which may be Tomcat's temp folder in some environments.
+     * Absolute paths are returned unchanged.
+     */
+    private static String resolveDataDir(String configured) {
+        Path p = Paths.get(configured);
+        if (p.isAbsolute()) return p.toString();
+        String base = System.getProperty("app.base.dir");
+        if (base != null && !base.trim().isEmpty()) {
+            return Paths.get(base, configured).toAbsolutePath().toString();
+        }
+        return p.toAbsolutePath().toString();
     }
 
     public void log(String eventType, String user, String employee, String details, String status, String source) {
         AuditLogEntry entry = new AuditLogEntry(
+                eventType,
                 ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
-                eventType, user, employee, details, status, source
+                user, employee, details, status, source
         );
         lock.lock();
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(auditFilePath.toFile(), true))) {
+        // Use explicit UTF-8 encoding — FileWriter uses the JVM default charset
+        // (Windows-1252 on European-locale Windows) which corrupts non-ASCII characters
+        // such as Danish æ/ø, producing invalid UTF-8 bytes that crash the read path.
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
+                new FileOutputStream(auditFilePath.toFile(), true), StandardCharsets.UTF_8))) {
             writer.write(mapper.writeValueAsString(entry));
             writer.newLine();
         } catch (IOException e) {
@@ -71,7 +97,15 @@ public class AuditService {
         }
         List<AuditLogEntry> entries = new ArrayList<>();
         lock.lock();
-        try (BufferedReader reader = Files.newBufferedReader(auditFilePath)) {
+        // Use a lenient UTF-8 decoder (REPLACE on bad bytes) instead of
+        // Files.newBufferedReader() which uses a strict decoder (REPORT) and throws
+        // MalformedInputException("Input length = 1") on the first invalid byte,
+        // aborting the entire read and losing all remaining entries.
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                Files.newInputStream(auditFilePath),
+                StandardCharsets.UTF_8.newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPLACE)
+                        .onUnmappableCharacter(CodingErrorAction.REPLACE)))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
