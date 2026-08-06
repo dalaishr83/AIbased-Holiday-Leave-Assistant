@@ -31,6 +31,9 @@ public class IndexController {
         }
         model.addAttribute("appTitle", "Holiday Leave Assistant");
 
+        String employeeName = (String) session.getAttribute("employee_name");
+        model.addAttribute("greetingName", employeeName);
+
         String role = (String) session.getAttribute("role");
         if ("admin".equals(role)) {
             return "admin-page";
