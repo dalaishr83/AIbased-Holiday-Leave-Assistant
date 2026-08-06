@@ -34,6 +34,9 @@ public class IndexController {
         String employeeName = (String) session.getAttribute("employee_name");
         model.addAttribute("greetingName", employeeName);
 
+        String loginUsername = (String) session.getAttribute("username");
+        model.addAttribute("loginUsername", loginUsername);
+
         String role = (String) session.getAttribute("role");
         if ("admin".equals(role)) {
             return "admin-page";

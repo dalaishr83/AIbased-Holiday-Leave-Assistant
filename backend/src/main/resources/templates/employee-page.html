@@ -107,7 +107,8 @@
     </header>
 
     <div class="messages" id="messages"
-         th:data-greeting-name="${greetingName} ?: 'there'">
+         th:data-greeting-name="${greetingName} ?: 'there'"
+         th:data-login-username="${loginUsername} ?: ''">
         <div class="welcome-card" id="welcomeCard">
             <div class="welcome-robot">
                 <svg width="90" height="100" viewBox="0 0 120 130" fill="none" xmlns="http://www.w3.org/2000/svg">

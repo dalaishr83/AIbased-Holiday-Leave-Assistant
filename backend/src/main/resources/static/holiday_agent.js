@@ -361,17 +361,23 @@
     function buildQuickChips() {
         if (!quickChips) return;
         quickChips.innerHTML = "";
+        const loginUsername = (messagesEl
+            ? messagesEl.getAttribute("data-login-username")
+            : null) || employees[0] || "me";
         const templates = [
             "How many days has {name} taken in {year}?",
             "Show leave summary for {name} in {year}",
-            "Which employees have the most leave in {year}?",
             "What is {name}'s remaining leave for {year}?",
+            "How many vacations of type PC for {name}?",
+            "How many days did {name} take in March {year}?",
+            "What is {name}'s longest leave streak in {year}?",
             "Generate leave report for {name} in {year}",
-            "Show all leave types",
+            "Which employees have the most leave in {year}?",
+            "Add vacation for {name}",
+            "Delete vacation for {name}",
         ];
-        const sample = employees.length > 0 ? employees[0] : "Alice";
         templates.forEach(tpl => {
-            const label = tpl.replace("{name}", sample).replace("{year}", String(currentYear));
+            const label = tpl.replace("{name}", loginUsername).replace("{year}", String(currentYear));
             const chip = document.createElement("button");
             chip.className = "chip";
             chip.textContent = label;
