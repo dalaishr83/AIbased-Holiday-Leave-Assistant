@@ -109,7 +109,7 @@
                 '<h2 class="welcome-title">Hello, ' + greetingName + '! I\'m your Leave Assistant.</h2>' +
                 '<p class="welcome-sub">Ask me anything about employee holidays and leave—I\'ll answer strictly based<br>' +
                 'on your Excel data. You can also add new leave entries or delete existing ones.<br>' +
-                'To get started, upload your <span class="xlsx-tag">.xlsx</span> file using the sidebar menu.</p>';
+                'Contact your administrator to upload or manage files.</p>';
             messagesEl.insertBefore(card, messagesEl.firstChild);
         }
     }
@@ -442,7 +442,6 @@
     clearHistoryBtn.addEventListener("click", async () => {
         await fetch("/api/clear-history", { method: "POST" });
         messagesEl.innerHTML = "";
-        showWelcomeCard();
     });
 
     refreshBtn.addEventListener("click", () => {
