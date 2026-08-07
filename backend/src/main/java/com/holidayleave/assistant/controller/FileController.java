@@ -87,13 +87,14 @@ public class FileController {
                 try {
                     String uname = secretService.provisionEmployee(emp);
                     provisioned.add(emp + " → " + uname);
-                    auditService.log("employee_provisioned", actingUser, emp,
-                            "Credential created: " + uname, "success", "api");
+                    /*auditService.log("employee_provisioned", actingUser, emp,
+                            "Credential created: " + uname, "success", "api");*/
                 } catch (Exception e) {
                     log.warn("Provisioning failed for '{}': {}", emp, e.getMessage());
                 }
             }
-
+            //log(String eventType, String user, String employee, String details, String status, String source) 
+            auditService.log("File loaded as '" + canonicalName + "'.", "Admin", actingUser, employees.size() + " employee(s) found.", "success", "api");
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("message",              "File loaded as '" + canonicalName + "'. " + employees.size() + " employee(s) found.");
             r.put("employees",            employees);

@@ -1,48 +1,39 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <th:block th:replace="~{admin/layout :: base-head}"></th:block>
     <title>Audit Log — Holiday Leave Assistant</title>
-    <link rel="stylesheet" th:href="@{/static/holiday_agent.css}">
     <style>
         /*
-         * Full-viewport layout: html/body fill 100vh, the page column is a flex
-         * column that stretches to fill all remaining space. The table-scroll div
-         * takes whatever height is left after the chrome above and below it.
-         * This means NO fixed px heights anywhere — the table grows/shrinks with
-         * the window and pagination sits flush below it.
+         * Full-viewport layout: the main area is a flex column.
+         * The table-scroll div takes whatever height is left.
+         * No fixed px heights.
          */
-        html, body {
-            height: 100%;
-            margin: 0;
-            overflow: hidden; /* page-level scroll is gone; table scrolls internally */
+        .main {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
-        body { background: var(--main-bg); }
 
-        /* Outer page column — fills viewport, scrolls as a whole on very small heights */
         .audit-page {
             max-width: 960px;
             margin: 0 auto;
             padding: 24px 20px 16px;
-            height: 100%;
+            flex: 1 1 0;
+            min-height: 0;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
+            width: 100%;
         }
-        .audit-page h1 { font-size: 1.4rem; margin: 0 0 8px; flex-shrink: 0; }
-        .audit-page .back-link {
-            display: inline-flex; align-items: center; gap: 6px;
-            color: var(--accent); text-decoration: none; font-size: .85rem;
-            margin-bottom: 16px; flex-shrink: 0;
-        }
+        .audit-page h1 { font-size: 1.4rem; margin: 0 0 16px; flex-shrink: 0; }
 
         /* Card fills remaining height of the column */
         .audit-card {
             background: var(--surface); border: 1px solid var(--border);
             border-radius: 10px; padding: 20px 24px 16px;
-            flex: 1 1 0;           /* grow to fill, shrink when window shrinks */
-            min-height: 0;         /* allow flex child to shrink below content size */
+            flex: 1 1 0;
+            min-height: 0;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -74,7 +65,6 @@
         }
         .audit-toolbar .btn-refresh:hover { background: var(--sidebar-hover); }
 
-        /* tableWrap fills the remaining card space */
         #tableWrap {
             flex: 1 1 0;
             min-height: 0;
@@ -82,7 +72,6 @@
             flex-direction: column;
         }
 
-        /* The scroll container expands to fill tableWrap — no fixed height */
         .table-scroll {
             flex: 1 1 0;
             min-height: 0;
@@ -101,7 +90,7 @@
         }
         tbody td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text); word-break: break-word; }
         tbody tr:last-child td { border-bottom: none; }
-        tbody tr:hover { background: var(--sidebar-hover); }
+        tbody tr:hover { background: rgba(42,91,215,.05); }
 
         .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; white-space: nowrap; }
         .badge-success { background: #d1fae5; color: #065f46; }
@@ -115,12 +104,10 @@
         .ts-cell { white-space: nowrap; color: var(--muted); font-size: .78rem; }
         #loadingMsg { color: var(--muted); font-size: .85rem; padding: 20px 0; text-align: center; display: none; flex-shrink: 0; }
 
-        /* Pagination — pinned below the scroll area, never overlaps it */
         .pagination {
             display: flex; align-items: center; justify-content: space-between;
             flex-wrap: wrap; gap: 8px;
-            margin-top: 10px;
-            font-size: .82rem; color: var(--muted);
+            margin-top: 10px; font-size: .82rem; color: var(--muted);
             flex-shrink: 0;
         }
         .pagination-controls { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
@@ -135,7 +122,6 @@
         .pg-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
         .pg-ellipsis { padding: 4px 6px; color: var(--muted); }
 
-        /* ── Responsive ──────────────────────────────────────────────────── */
         @media (max-width: 768px) {
             .audit-page { padding: 16px 12px 12px; }
             .audit-toolbar { gap: 8px; }
@@ -144,13 +130,8 @@
 
         @media (max-width: 480px) {
             .audit-card { padding: 12px 10px 10px; }
-
-            /* Card-stack layout — no horizontal scroll needed */
             thead { display: none; }
-            .table-scroll {
-                overflow-x: visible;
-                border: none; border-radius: 0;
-            }
+            .table-scroll { overflow-x: visible; border: none; border-radius: 0; }
             tbody tr {
                 display: block;
                 border: 1px solid var(--border); border-radius: 6px;
@@ -171,73 +152,78 @@
 </head>
 <body>
 
-<div class="audit-page">
-    <a href="/" class="back-link">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-        Back to Dashboard
-    </a>
-    <h1>Audit Log</h1>
+<th:block th:replace="~{admin/layout :: mobile-chrome}"></th:block>
+<th:block th:replace="~{admin/layout :: sidebar}"></th:block>
 
-    <div class="audit-card">
-        <h2>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="8" y1="13" x2="16" y2="13"/>
-                <line x1="8" y1="17" x2="16" y2="17"/>
-                <polyline points="10 9 9 9 8 9"/>
-            </svg>
-            System Activity
-            <span class="count-label" id="countLabel"></span>
-        </h2>
+<main class="main">
+    <th:block th:replace="~{admin/layout :: topbar}"></th:block>
 
-        <div class="audit-toolbar">
-            <input type="text" id="filterInput" placeholder="Filter by timestamp, Admin Name, employee, event, details…">
-            <select id="statusFilter">
-                <option value="">All statuses</option>
-                <option value="success">Success</option>
-                <option value="error">Error</option>
-                <option value="warning">Warning</option>
-            </select>
-            <select id="sourceFilter">
-                <option value="">All sources</option>
-                <option value="api">API</option>
-                <option value="chat">Chat</option>
-                <option value="system">System</option>
-            </select>
-            <button class="btn-refresh" id="refreshBtn">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                Refresh
-            </button>
-        </div>
+    <!-- ── Audit log content ──────────────────────────────────────────── -->
+    <div class="audit-page">
+        <h1>Audit Log</h1>
 
-        <div id="loadingMsg">Loading…</div>
-        <div id="tableWrap">
-            <div class="table-scroll" id="tableScroll">
-                <table id="auditTable">
-                    <thead>
-                        <tr>
-                            <th>Timestamp</th>
-                            <th>Event</th>
-                            <th>Admin Name</th>
-                            <th>Employee</th>
-                            <th>Details</th>
-                            <th>Status</th>
-                            <th>Source</th>
-                        </tr>
-                    </thead>
-                    <tbody id="auditBody"></tbody>
-                </table>
+        <div class="audit-card">
+            <h2>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="8" y1="13" x2="16" y2="13"/>
+                    <line x1="8" y1="17" x2="16" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                System Activity
+                <span class="count-label" id="countLabel"></span>
+            </h2>
+
+            <div class="audit-toolbar">
+                <input type="text" id="filterInput" placeholder="Filter by timestamp, Admin Name, employee, event, details…">
+                <select id="statusFilter">
+                    <option value="">All statuses</option>
+                    <option value="success">Success</option>
+                    <option value="error">Error</option>
+                    <option value="warning">Warning</option>
+                </select>
+                <select id="sourceFilter">
+                    <option value="">All sources</option>
+                    <option value="api">API</option>
+                    <option value="chat">Chat</option>
+                    <option value="system">System</option>
+                </select>
+                <button class="btn-refresh" id="auditRefreshBtn">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    Refresh
+                </button>
             </div>
-            <div class="empty-msg" id="emptyMsg" style="display:none;">No audit log entries found.</div>
-            <div class="pagination" id="paginationBar" style="display:none;">
-                <span id="pageInfo"></span>
-                <div class="pagination-controls" id="pageControls"></div>
+
+            <div id="loadingMsg">Loading…</div>
+            <div id="tableWrap">
+                <div class="table-scroll" id="tableScroll">
+                    <table id="auditTable">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Event</th>
+                                <th>Admin Name</th>
+                                <th>Employee</th>
+                                <th>Details</th>
+                                <th>Status</th>
+                                <th>Source</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditBody"></tbody>
+                    </table>
+                </div>
+                <div class="empty-msg" id="emptyMsg" style="display:none;">No audit log entries found.</div>
+                <div class="pagination" id="paginationBar" style="display:none;">
+                    <span id="pageInfo"></span>
+                    <div class="pagination-controls" id="pageControls"></div>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</main>
 
+<script th:src="@{/static/holiday_agent_admin.js}"></script>
 <script>
 (function () {
     'use strict';
@@ -249,10 +235,7 @@
 
     function statusBadge(s) {
         if (!s) return '';
-        var cls = s === 'success' ? 'badge-success'
-                : s === 'error'   ? 'badge-error'
-                : s === 'warning' ? 'badge-warning'
-                : 'badge-info';
+        var cls = s === 'success' ? 'badge-success' : s === 'error' ? 'badge-error' : s === 'warning' ? 'badge-warning' : 'badge-info';
         return '<span class="badge ' + cls + '">' + esc(s) + '</span>';
     }
 
@@ -262,11 +245,7 @@
 
     function esc(s) {
         if (!s) return '';
-        return String(s)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function fmtTs(ts) {
@@ -275,13 +254,13 @@
     }
 
     function renderPage(page) {
-        var tbody     = document.getElementById('auditBody');
-        var empty     = document.getElementById('emptyMsg');
-        var scroll    = document.getElementById('tableScroll');
-        var pagBar    = document.getElementById('paginationBar');
-        var countEl   = document.getElementById('countLabel');
-        var pageInfo  = document.getElementById('pageInfo');
-        var pageCtrl  = document.getElementById('pageControls');
+        var tbody    = document.getElementById('auditBody');
+        var empty    = document.getElementById('emptyMsg');
+        var scroll   = document.getElementById('tableScroll');
+        var pagBar   = document.getElementById('paginationBar');
+        var countEl  = document.getElementById('countLabel');
+        var pageInfo = document.getElementById('pageInfo');
+        var pageCtrl = document.getElementById('pageControls');
 
         tbody.innerHTML = '';
 
@@ -319,69 +298,40 @@
                 + '</tr>';
         }
         tbody.innerHTML = rows;
-
-        /* Reset scroll position to top of table on page change */
         scroll.scrollTop = 0;
 
-        /* Count label shows total filtered */
         countEl.textContent = filteredEntries.length + ' entr' + (filteredEntries.length === 1 ? 'y' : 'ies');
 
-        /* Pagination bar */
-        if (totalPages <= 1) {
-            pagBar.style.display = 'none';
-            return;
-        }
+        if (totalPages <= 1) { pagBar.style.display = 'none'; return; }
         pagBar.style.display = '';
         pageInfo.textContent = 'Showing ' + (start + 1) + '–' + end + ' of ' + filteredEntries.length;
 
-        /* Build page buttons with ellipsis for large sets */
-        var html = '';
-
-        html += '<button class="pg-btn" id="pgPrev" ' + (currentPage === 1 ? 'disabled' : '') + '>&#8249; Prev</button>';
-
+        var html = '<button class="pg-btn" id="pgPrev" ' + (currentPage === 1 ? 'disabled' : '') + '>&#8249; Prev</button>';
         var pages = buildPageList(currentPage, totalPages);
         for (var j = 0; j < pages.length; j++) {
             var p = pages[j];
-            if (p === '…') {
-                html += '<span class="pg-ellipsis">…</span>';
-            } else {
-                html += '<button class="pg-btn' + (p === currentPage ? ' active' : '') + '" data-page="' + p + '">' + p + '</button>';
-            }
+            html += p === '…'
+                ? '<span class="pg-ellipsis">…</span>'
+                : '<button class="pg-btn' + (p === currentPage ? ' active' : '') + '" data-page="' + p + '">' + p + '</button>';
         }
-
         html += '<button class="pg-btn" id="pgNext" ' + (currentPage === totalPages ? 'disabled' : '') + '>Next &#8250;</button>';
-
         pageCtrl.innerHTML = html;
 
-        /* Attach listeners */
         var prev = document.getElementById('pgPrev');
         var next = document.getElementById('pgNext');
         if (prev) prev.addEventListener('click', function () { renderPage(currentPage - 1); });
         if (next) next.addEventListener('click', function () { renderPage(currentPage + 1); });
-
-        var numBtns = pageCtrl.querySelectorAll('[data-page]');
-        for (var k = 0; k < numBtns.length; k++) {
-            numBtns[k].addEventListener('click', function () {
-                renderPage(parseInt(this.getAttribute('data-page'), 10));
-            });
-        }
+        pageCtrl.querySelectorAll('[data-page]').forEach(function (btn) {
+            btn.addEventListener('click', function () { renderPage(parseInt(this.getAttribute('data-page'), 10)); });
+        });
     }
 
     function buildPageList(current, total) {
-        /* Always show first, last, current ±1; ellipsis for gaps */
-        if (total <= 7) {
-            var arr = [];
-            for (var i = 1; i <= total; i++) arr.push(i);
-            return arr;
-        }
-        var pages = [];
-        var shown = {};
+        if (total <= 7) { var a = []; for (var i = 1; i <= total; i++) a.push(i); return a; }
+        var pages = [], shown = {};
         function add(n) { if (n >= 1 && n <= total && !shown[n]) { shown[n] = true; pages.push(n); } }
-        add(1); add(2);
-        add(current - 1); add(current); add(current + 1);
-        add(total - 1); add(total);
+        add(1); add(2); add(current - 1); add(current); add(current + 1); add(total - 1); add(total);
         pages.sort(function (a, b) { return a - b; });
-
         var result = [];
         for (var j = 0; j < pages.length; j++) {
             if (j > 0 && pages[j] - pages[j - 1] > 1) result.push('…');
@@ -411,7 +361,6 @@
     function load() {
         document.getElementById('loadingMsg').style.display = 'block';
         document.getElementById('tableWrap').style.display  = 'none';
-
         fetch('/api/admin/audit-log')
             .then(function (r) { return r.json(); })
             .then(function (data) {
@@ -428,7 +377,7 @@
     document.getElementById('filterInput').addEventListener('input', applyFilters);
     document.getElementById('statusFilter').addEventListener('change', applyFilters);
     document.getElementById('sourceFilter').addEventListener('change', applyFilters);
-    document.getElementById('refreshBtn').addEventListener('click', load);
+    document.getElementById('auditRefreshBtn').addEventListener('click', load);
 
     load();
 })();

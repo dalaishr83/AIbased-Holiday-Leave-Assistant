@@ -1,37 +1,31 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <th:block th:replace="~{admin/layout :: base-head}"></th:block>
     <title>PC Approvals — Holiday Leave Assistant</title>
-    <link rel="stylesheet" th:href="@{/static/holiday_agent.css}">
     <style>
         /*
-         * Full-viewport flex column — identical pattern to admin-audit-log.html.
-         * The table-scroll div takes all remaining height; no fixed px heights.
+         * Full-viewport flex column — the table-scroll div takes all remaining height.
+         * No fixed px heights — the table grows/shrinks with the window.
          */
-        html, body {
-            height: 100%;
-            margin: 0;
+        .main {
+            display: flex;
+            flex-direction: column;
             overflow: hidden;
         }
-        body { background: var(--main-bg); }
 
         .approvals-page {
             max-width: 960px;
             margin: 0 auto;
             padding: 24px 20px 16px;
-            height: 100%;
+            flex: 1 1 0;
+            min-height: 0;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
+            width: 100%;
         }
-        .approvals-page h1 { font-size: 1.4rem; margin: 0 0 8px; flex-shrink: 0; }
-        .approvals-page .back-link {
-            display: inline-flex; align-items: center; gap: 6px;
-            color: var(--accent); text-decoration: none; font-size: .85rem;
-            margin-bottom: 16px; flex-shrink: 0;
-        }
+        .approvals-page h1 { font-size: 1.4rem; margin: 0 0 16px; flex-shrink: 0; }
 
         /* Card fills remaining viewport height */
         .approvals-card {
@@ -103,7 +97,7 @@
         }
         td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text); }
         tr:last-child td { border-bottom: none; }
-        tbody tr:hover { background: var(--sidebar-hover); }
+        tbody tr:hover { background: rgba(42,91,215,.05); }
 
         /* ── Pagination ────────────────────────────────────────────────── */
         .pagination {
@@ -149,7 +143,6 @@
         }
         @media (max-width: 480px) {
             .approvals-card { padding: 12px 10px 10px; }
-            /* Card-stack layout */
             thead { display: none; }
             .table-scroll { overflow-x: visible; border: none; border-radius: 0; }
             tbody tr {
@@ -166,7 +159,6 @@
                 font-weight: 600; color: var(--muted);
                 flex-shrink: 0; min-width: 80px; font-size: .75rem;
             }
-            /* Checkbox cell — no label needed */
             tbody td:first-child::before { content: ''; min-width: 0; }
             .pagination { justify-content: center; }
             .action-row { flex-direction: column; align-items: stretch; }
@@ -176,110 +168,110 @@
 </head>
 <body>
 
-<div class="approvals-page">
-    <a href="/" class="back-link">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-        Back to Dashboard
-    </a>
-    <h1>PC Vacation Approvals</h1>
+<th:block th:replace="~{admin/layout :: mobile-chrome}"></th:block>
+<th:block th:replace="~{admin/layout :: sidebar}"></th:block>
 
-    <div class="approvals-card">
-        <h2>
-            Pending Personal Choice Holiday (PC) Entries
-            <span class="count-label" id="countLabel"></span>
-        </h2>
+<main class="main">
+    <th:block th:replace="~{admin/layout :: topbar}"></th:block>
 
-        <!-- Empty state: no records at all (server-side) -->
-        <div th:if="${pcRecords.isEmpty()}" class="empty-msg">
-            No PC vacation entries found in the loaded file.
-        </div>
+    <!-- ── Approvals content ──────────────────────────────────────────── -->
+    <div class="approvals-page">
+        <h1>PC Vacation Approvals</h1>
 
-        <div th:if="${!pcRecords.isEmpty()}" style="display:flex;flex-direction:column;flex:1 1 0;min-height:0;">
+        <div class="approvals-card">
+            <h2>
+                Pending Personal Choice Holiday (PC) Entries
+                <span class="count-label" id="countLabel"></span>
+            </h2>
 
-            <!-- Filter toolbar -->
-            <div class="filter-toolbar" id="filterToolbar">
-                <input type="text"   id="fEmployee"    placeholder="Employee name…">
-                <input type="text"   id="fStartDate"   placeholder="Start date… (e.g. 2026)">
-                <input type="text"   id="fEndDate"     placeholder="End date…">
-                <input type="number" id="fDays"        placeholder="Days">
-                <input type="number" id="fYear"        placeholder="Year">
-                <button class="btn-clear-filters" id="btnClearFilters">Clear</button>
+            <!-- Empty state: no records at all (server-side) -->
+            <div th:if="${pcRecords.isEmpty()}" class="empty-msg">
+                No PC vacation entries found in the loaded file.
             </div>
 
-            <!-- Select-all -->
-            <div class="select-all-row">
-                <input type="checkbox" id="selectAll">
-                <label for="selectAll">Select all visible</label>
-            </div>
+            <div th:if="${!pcRecords.isEmpty()}" style="display:flex;flex-direction:column;flex:1 1 0;min-height:0;">
 
-            <!-- Table -->
-            <div id="tableWrap">
-                <div class="table-scroll" id="tableScroll">
-                    <table id="approvalsTable">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th>Employee</th>
-                                <th>Holiday Type</th>
-                                <th>Start Date</th>
-                                <th>End Date</th>
-                                <th>Days</th>
-                                <th>Year</th>
-                            </tr>
-                        </thead>
-                        <tbody id="approvalsBody">
-                            <!-- Thymeleaf renders all rows; JS filters/paginates client-side -->
-                            <tr th:each="rec : ${pcRecords}"
-                                th:data-employee="${rec.employee_name}"
-                                th:data-start="${rec.start_date}"
-                                th:data-end="${rec.end_date}"
-                                th:data-days="${rec.days}"
-                                th:data-year="${rec.year}"
-                                th:data-holiday-type="${rec.holiday_type}"
-                                class="data-row">
-                                <td data-label=""><input type="checkbox" class="row-check"
-                                       th:data-employee="${rec.employee_name}"
-                                       th:data-start="${rec.start_date}"
-                                       th:data-end="${rec.end_date}"></td>
-                                <td data-label="Employee"     th:text="${rec.employee_name}"></td>
-                                <td data-label="Holiday Type" th:text="${rec.holiday_type}"></td>
-                                <td data-label="Start Date"   th:text="${rec.start_date}"></td>
-                                <td data-label="End Date"     th:text="${rec.end_date}"></td>
-                                <td data-label="Days"         th:text="${rec.days}"></td>
-                                <td data-label="Year"         th:text="${rec.year}"></td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <!-- Filter toolbar -->
+                <div class="filter-toolbar" id="filterToolbar">
+                    <input type="text"   id="fEmployee"    placeholder="Employee name…">
+                    <input type="text"   id="fStartDate"   placeholder="Start date… (e.g. 2026)">
+                    <input type="text"   id="fEndDate"     placeholder="End date…">
+                    <input type="number" id="fDays"        placeholder="Days">
+                    <input type="number" id="fYear"        placeholder="Year">
+                    <button class="btn-clear-filters" id="btnClearFilters">Clear</button>
                 </div>
-                <div class="no-results" id="noResults">No records match the current filters.</div>
-                <div class="pagination" id="paginationBar" style="display:none;">
-                    <span id="pageInfo"></span>
-                    <div class="pagination-controls" id="pageControls"></div>
-                </div>
-            </div>
 
-            <!-- Action row -->
-            <div class="action-row">
-                <button class="btn-approve" id="approveBtn" disabled>Approve Selected as Vacation (V)</button>
-                <div class="alert" id="approvalAlert"></div>
+                <!-- Select-all -->
+                <div class="select-all-row">
+                    <input type="checkbox" id="selectAll">
+                    <label for="selectAll">Select all visible</label>
+                </div>
+
+                <!-- Table -->
+                <div id="tableWrap">
+                    <div class="table-scroll" id="tableScroll">
+                        <table id="approvalsTable">
+                            <thead>
+                                <tr>
+                                    <th></th>
+                                    <th>Employee</th>
+                                    <th>Holiday Type</th>
+                                    <th>Start Date</th>
+                                    <th>End Date</th>
+                                    <th>Days</th>
+                                    <th>Year</th>
+                                </tr>
+                            </thead>
+                            <tbody id="approvalsBody">
+                                <tr th:each="rec : ${pcRecords}"
+                                    th:data-employee="${rec.employee_name}"
+                                    th:data-start="${rec.start_date}"
+                                    th:data-end="${rec.end_date}"
+                                    th:data-days="${rec.days}"
+                                    th:data-year="${rec.year}"
+                                    th:data-holiday-type="${rec.holiday_type}"
+                                    class="data-row">
+                                    <td data-label=""><input type="checkbox" class="row-check"
+                                           th:data-employee="${rec.employee_name}"
+                                           th:data-start="${rec.start_date}"
+                                           th:data-end="${rec.end_date}"></td>
+                                    <td data-label="Employee"     th:text="${rec.employee_name}"></td>
+                                    <td data-label="Holiday Type" th:text="${rec.holiday_type}"></td>
+                                    <td data-label="Start Date"   th:text="${rec.start_date}"></td>
+                                    <td data-label="End Date"     th:text="${rec.end_date}"></td>
+                                    <td data-label="Days"         th:text="${rec.days}"></td>
+                                    <td data-label="Year"         th:text="${rec.year}"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="no-results" id="noResults">No records match the current filters.</div>
+                    <div class="pagination" id="paginationBar" style="display:none;">
+                        <span id="pageInfo"></span>
+                        <div class="pagination-controls" id="pageControls"></div>
+                    </div>
+                </div>
+
+                <!-- Action row -->
+                <div class="action-row">
+                    <button class="btn-approve" id="approveBtn" disabled>Approve Selected as Vacation (V)</button>
+                    <div class="alert" id="approvalAlert"></div>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</main>
 
+<script th:src="@{/static/holiday_agent_admin.js}"></script>
 <script>
 (function () {
     'use strict';
 
-    /* ── Constants ───────────────────────────────────────────────────── */
     var PAGE_SIZE = 10;
-
-    /* ── State ───────────────────────────────────────────────────────── */
-    var allRows      = [];   /* all <tr> elements (static, from Thymeleaf) */
-    var visibleRows  = [];   /* rows that pass current filters */
+    var allRows      = [];
+    var visibleRows  = [];
     var currentPage  = 1;
 
-    /* ── Element refs ────────────────────────────────────────────────── */
     var selectAll   = document.getElementById('selectAll');
     var approveBtn  = document.getElementById('approveBtn');
     var tbody       = document.getElementById('approvalsBody');
@@ -293,47 +285,38 @@
     /* Guard: empty-state page has none of these */
     if (!approveBtn) return;
 
-    /* Collect all data rows once at startup */
     allRows = Array.prototype.slice.call(tbody.querySelectorAll('tr.data-row'));
 
-    /* ── Helpers ─────────────────────────────────────────────────────── */
     function val(id) { return document.getElementById(id).value.trim().toLowerCase(); }
 
     function updateApproveBtn() {
-        /* Scope entirely to visibleRows so hidden (filtered-out) rows are ignored */
         var visibleChecks   = visibleRows.map(function (tr) { return tr.querySelector('.row-check'); })
                                          .filter(Boolean);
         var checkedCount    = visibleChecks.filter(function (cb) { return cb.checked; }).length;
         var visibleCount    = visibleChecks.length;
-
         approveBtn.disabled = checkedCount === 0;
-
-        /* Sync select-all header checkbox state */
         selectAll.indeterminate = checkedCount > 0 && checkedCount < visibleCount;
         selectAll.checked       = visibleCount > 0  && checkedCount === visibleCount;
     }
 
-    /* ── Filtering ───────────────────────────────────────────────────── */
     function applyFilters() {
-        var fEmp     = val('fEmployee');
-        var fStart   = val('fStartDate');
-        var fEnd     = val('fEndDate');
-        var fDays    = val('fDays');
-        var fYear    = val('fYear');
+        var fEmp   = val('fEmployee');
+        var fStart = val('fStartDate');
+        var fEnd   = val('fEndDate');
+        var fDays  = val('fDays');
+        var fYear  = val('fYear');
 
         visibleRows = allRows.filter(function (tr) {
-            if (fEmp     && tr.getAttribute('data-employee').toLowerCase().indexOf(fEmp)   === -1) return false;
-            if (fStart   && tr.getAttribute('data-start').toLowerCase().indexOf(fStart)     === -1) return false;
-            if (fEnd     && tr.getAttribute('data-end').toLowerCase().indexOf(fEnd)               === -1) return false;
-            if (fDays    && tr.getAttribute('data-days').toLowerCase().indexOf(fDays)             === -1) return false;
-            if (fYear    && tr.getAttribute('data-year').toLowerCase().indexOf(fYear)             === -1) return false;
+            if (fEmp   && tr.getAttribute('data-employee').toLowerCase().indexOf(fEmp)   === -1) return false;
+            if (fStart && tr.getAttribute('data-start').toLowerCase().indexOf(fStart)     === -1) return false;
+            if (fEnd   && tr.getAttribute('data-end').toLowerCase().indexOf(fEnd)         === -1) return false;
+            if (fDays  && tr.getAttribute('data-days').toLowerCase().indexOf(fDays)       === -1) return false;
+            if (fYear  && tr.getAttribute('data-year').toLowerCase().indexOf(fYear)       === -1) return false;
             return true;
         });
-
         renderPage(1);
     }
 
-    /* ── Pagination ──────────────────────────────────────────────────── */
     function renderPage(page) {
         var total      = visibleRows.length;
         var totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -344,12 +327,9 @@
         var start = (currentPage - 1) * PAGE_SIZE;
         var end   = Math.min(start + PAGE_SIZE, total);
 
-        /* Hide every row first, then show the slice */
         allRows.forEach(function (tr) { tr.style.display = 'none'; });
-        var pageRows = visibleRows.slice(start, end);
-        pageRows.forEach(function (tr) { tr.style.display = ''; });
+        visibleRows.slice(start, end).forEach(function (tr) { tr.style.display = ''; });
 
-        /* Empty / no-results */
         if (total === 0) {
             noResults.style.display     = 'block';
             tableScroll.style.display   = 'none';
@@ -361,10 +341,8 @@
         noResults.style.display   = 'none';
         tableScroll.style.display = '';
         tableScroll.scrollTop     = 0;
-
         countLabel.textContent = total + ' entr' + (total === 1 ? 'y' : 'ies');
 
-        /* Pagination bar */
         if (totalPages <= 1) {
             pagBar.style.display = 'none';
         } else {
@@ -372,20 +350,17 @@
             pageInfo.textContent = 'Showing ' + (start + 1) + '–' + end + ' of ' + total;
             buildPageControls(currentPage, totalPages);
         }
-
         updateApproveBtn();
     }
 
     function buildPageControls(current, total) {
-        var pages  = buildPageList(current, total);
-        var html   = '<button class="pg-btn" id="pgPrev"' + (current === 1     ? ' disabled' : '') + '>&#8249; Prev</button>';
+        var pages = buildPageList(current, total);
+        var html  = '<button class="pg-btn" id="pgPrev"' + (current === 1     ? ' disabled' : '') + '>&#8249; Prev</button>';
         for (var i = 0; i < pages.length; i++) {
             var p = pages[i];
-            if (p === '…') {
-                html += '<span class="pg-ellipsis">…</span>';
-            } else {
-                html += '<button class="pg-btn' + (p === current ? ' active' : '') + '" data-page="' + p + '">' + p + '</button>';
-            }
+            html += p === '…'
+                ? '<span class="pg-ellipsis">…</span>'
+                : '<button class="pg-btn' + (p === current ? ' active' : '') + '" data-page="' + p + '">' + p + '</button>';
         }
         html += '<button class="pg-btn" id="pgNext"' + (current === total ? ' disabled' : '') + '>Next &#8250;</button>';
         pageCtrl.innerHTML = html;
@@ -394,25 +369,16 @@
         var next = document.getElementById('pgNext');
         if (prev) prev.addEventListener('click', function () { renderPage(currentPage - 1); });
         if (next) next.addEventListener('click', function () { renderPage(currentPage + 1); });
-        var numBtns = pageCtrl.querySelectorAll('[data-page]');
-        for (var k = 0; k < numBtns.length; k++) {
-            numBtns[k].addEventListener('click', function () {
-                renderPage(parseInt(this.getAttribute('data-page'), 10));
-            });
-        }
+        pageCtrl.querySelectorAll('[data-page]').forEach(function (btn) {
+            btn.addEventListener('click', function () { renderPage(parseInt(this.getAttribute('data-page'), 10)); });
+        });
     }
 
     function buildPageList(current, total) {
-        if (total <= 7) {
-            var arr = [];
-            for (var i = 1; i <= total; i++) arr.push(i);
-            return arr;
-        }
+        if (total <= 7) { var a = []; for (var i = 1; i <= total; i++) a.push(i); return a; }
         var pages = [], shown = {};
         function add(n) { if (n >= 1 && n <= total && !shown[n]) { shown[n] = true; pages.push(n); } }
-        add(1); add(2);
-        add(current - 1); add(current); add(current + 1);
-        add(total - 1); add(total);
+        add(1); add(2); add(current - 1); add(current); add(current + 1); add(total - 1); add(total);
         pages.sort(function (a, b) { return a - b; });
         var result = [];
         for (var j = 0; j < pages.length; j++) {
@@ -422,9 +388,7 @@
         return result;
     }
 
-    /* ── Select-all (visible rows only) ─────────────────────────────── */
     selectAll.addEventListener('change', function () {
-        /* Only touch checkboxes belonging to currently visible (filtered) rows */
         visibleRows.forEach(function (tr) {
             var cb = tr.querySelector('.row-check');
             if (cb) cb.checked = selectAll.checked;
@@ -433,12 +397,9 @@
     });
 
     tbody.addEventListener('change', function (e) {
-        if (e.target && e.target.classList.contains('row-check')) {
-            updateApproveBtn();
-        }
+        if (e.target && e.target.classList.contains('row-check')) updateApproveBtn();
     });
 
-    /* ── Filter listeners ────────────────────────────────────────────── */
     ['fEmployee', 'fStartDate', 'fEndDate', 'fDays', 'fYear'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.addEventListener('input', applyFilters);
@@ -451,7 +412,6 @@
         applyFilters();
     });
 
-    /* ── Approve button ──────────────────────────────────────────────── */
     approveBtn.addEventListener('click', function () {
         var selected = [];
         tbody.querySelectorAll('.row-check:checked').forEach(function (cb) {
@@ -488,7 +448,6 @@
         });
     });
 
-    /* ── Init ────────────────────────────────────────────────────────── */
     applyFilters();
 })();
 </script>

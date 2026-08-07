@@ -46,19 +46,25 @@ public class AdminController {
     public String settingsPage(Model model) {
         model.addAttribute("vacationTypes", typeService.findAll());
         model.addAttribute("restrictedTypes", restrictedTypeService.getRestrictedTypes());
-        return "admin-settings";
+        model.addAttribute("currentPage", "settings");
+        model.addAttribute("topbarSubtitle", "Admin — Settings");
+        return "admin/settings";
     }
 
     @GetMapping("/admin/approvals")
     public String approvalsPage(Model model) {
         List<Map<String, Object>> pcRecords = loadPcRecords();
         model.addAttribute("pcRecords", pcRecords);
-        return "admin-approvals";
+        model.addAttribute("currentPage", "approvals");
+        model.addAttribute("topbarSubtitle", "Admin — PC Approvals");
+        return "admin/approvals";
     }
 
     @GetMapping("/admin/audit-log")
-    public String auditLogPage() {
-        return "admin-audit-log";
+    public String auditLogPage(Model model) {
+        model.addAttribute("currentPage", "audit-log");
+        model.addAttribute("topbarSubtitle", "Admin — Audit Log");
+        return "admin/audit-log";
     }
 
     // ── Audit log API ─────────────────────────────────────────────────────────

@@ -487,6 +487,12 @@ html, body {
   border-radius: 5px; margin: 0 8px 2px 8px; transition: background .15s;
 }
 .sidebar-admin-link:hover { background: var(--sidebar-hover); }
+.sidebar-admin-link--active {
+  background: rgba(42,91,215,.22);
+  color: #ffffff;
+  font-weight: 600;
+}
+.sidebar-admin-link--active:hover { background: rgba(42,91,215,.32); }
 
 /* ── File delete button (admin file list) ───────────────────────────────── */
 .file-delete-btn {

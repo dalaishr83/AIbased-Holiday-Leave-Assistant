@@ -39,7 +39,8 @@ public class IndexController {
 
         String role = (String) session.getAttribute("role");
         if ("admin".equals(role)) {
-            return "admin-page";
+            model.addAttribute("currentPage", "dashboard");
+            return "admin/dashboard";
         }
         return "employee-page";
     }

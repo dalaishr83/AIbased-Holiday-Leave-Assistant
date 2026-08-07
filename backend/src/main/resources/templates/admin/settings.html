@@ -1,29 +1,101 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <th:block th:replace="~{admin/layout :: base-head}"></th:block>
     <title>Admin Settings — Holiday Leave Assistant</title>
-    <link rel="stylesheet" th:href="@{/static/holiday_agent.css}">
     <style>
-        /* ── Page shell — scrollable, no overflow ──────────────────────────── */
-        html, body { overflow: auto; }
+        /* ── Page shell — flex column to fill viewport ──────────────────── */
+        .main {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
 
         .settings-page {
-            max-width: 760px;
-            margin: 0 auto;
-            padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+            overflow: hidden;
         }
 
-        /* ── Back link + heading ─────────────────────────────────────────── */
-        .settings-page .back-link {
-            display: inline-flex; align-items: center; gap: 6px;
-            color: var(--accent); text-decoration: none;
-            font-size: .85rem; margin-bottom: 16px;
-        }
         .settings-page h1 {
             font-size: 1.3rem; font-weight: 700;
-            color: var(--text); margin: 0 0 20px 0;
+            color: var(--text); margin: 0 0 16px 0;
+            flex-shrink: 0;
+        }
+
+        /* ── Top row: two cards side by side ─────────────────────────────── */
+        .settings-top-row {
+            display: flex;
+            gap: 14px;
+            flex-shrink: 0;
+            margin-bottom: 14px;
+            align-items: flex-start;
+        }
+
+        .settings-top-row .sc-card {
+            flex: 1 1 0;
+            min-width: 0;
+            margin-bottom: 0;
+        }
+
+        /* ── Role management card — grows to fill remaining space ─────────── */
+        .settings-roles-row {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .settings-roles-row .sc-card {
+            flex: 1 1 0;
+            min-height: 0;
+            margin-bottom: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: visible;
+        }
+
+        .settings-roles-row .sc-card.open .sc-body {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .settings-roles-row .sc-body-inner {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .settings-roles-row .rm-layout {
+            flex: 1 1 0;
+            min-height: 0;
+            align-items: stretch;
+        }
+
+        .settings-roles-row .rm-controls {
+            align-self: center;
+            padding-top: 0;
+        }
+
+        .settings-roles-row .rm-panel {
+            flex: 1 1 0;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .settings-roles-row .rm-list {
+            flex: 1 1 0;
+            max-height: none;
+            min-height: 0;
         }
 
         /* ── Collapsible card ────────────────────────────────────────────── */
@@ -32,10 +104,9 @@
             border: 1px solid var(--border);
             border-radius: 10px;
             margin-bottom: 14px;
-            overflow: hidden;   /* keeps rounded corners during collapse */
+            overflow: hidden;
         }
 
-        /* Card header — the clickable toggle row */
         .sc-header {
             display: flex; align-items: center; justify-content: space-between;
             padding: 14px 18px;
@@ -59,9 +130,7 @@
             font-size: .92rem; font-weight: 700; color: var(--text);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .sc-subtitle {
-            font-size: .75rem; color: var(--muted); margin-top: 1px;
-        }
+        .sc-subtitle { font-size: .75rem; color: var(--muted); margin-top: 1px; }
 
         .sc-chevron {
             color: var(--muted); flex-shrink: 0;
@@ -69,14 +138,12 @@
         }
         .sc-card.open .sc-chevron { transform: rotate(180deg); }
 
-        /* Card body — collapses/expands */
         .sc-body {
             display: none;
             padding: 0 18px 18px;
             border-top: 1px solid var(--border);
         }
         .sc-card.open .sc-body { display: block; }
-
         .sc-body-inner { padding-top: 16px; }
 
         /* ── Vacation type rows ───────────────────────────────────────────── */
@@ -101,9 +168,7 @@
             display: inline-block; width: 3px; height: 14px;
             background: var(--accent); border-radius: 2px; flex-shrink: 0;
         }
-        .pw-divider {
-            border: none; border-top: 1px solid var(--border); margin: 18px 0;
-        }
+        .pw-divider { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
 
         /* ── Field rows ──────────────────────────────────────────────────── */
         .field-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
@@ -142,139 +207,140 @@
         .alert.error   { background: #fee2e2; color: #991b1b; }
 
         /* ── Description text ────────────────────────────────────────────── */
-        .sc-desc {
-            font-size: .82rem; color: var(--muted);
-            margin: 0 0 14px 0; line-height: 1.5;
-        }
+        .sc-desc { font-size: .82rem; color: var(--muted); margin: 0 0 14px 0; line-height: 1.5; }
 
         /* ── Role management dual-panel layout ───────────────────────────── */
-        .rm-layout {
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-        }
+        .rm-layout { display: flex; align-items: flex-start; gap: 10px; }
 
-        .rm-panel {
-            flex: 1 1 0;
-            min-width: 0;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
+        .rm-panel { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 
         .rm-panel-label {
-            font-size: .78rem;
-            font-weight: 700;
-            color: var(--muted);
-            margin: 0 0 4px 0;
-            text-transform: uppercase;
-            letter-spacing: .05em;
+            font-size: .78rem; font-weight: 700; color: var(--muted);
+            margin: 0 0 4px 0; text-transform: uppercase; letter-spacing: .05em;
         }
 
         .rm-list {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            /* viewport-relative height: never taller than ~30 % of the screen,
-               always at least 3 rows tall. Shrinks naturally on small devices. */
-            min-height: 96px;
-            max-height: min(30vh, 220px);
-            overflow-y: auto;
-            background: var(--bg);
-            scrollbar-width: thin;
-            scrollbar-color: var(--border) transparent;
+            list-style: none; margin: 0; padding: 0;
+            border: 1px solid var(--border); border-radius: 6px;
+            min-height: 96px; max-height: min(30vh, 220px);
+            overflow-y: auto; background: var(--bg);
+            scrollbar-width: thin; scrollbar-color: var(--border) transparent;
         }
         .rm-list::-webkit-scrollbar { width: 5px; }
         .rm-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
         .rm-list li {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 7px 10px;
-            font-size: .83rem;
-            color: var(--text);
-            cursor: pointer;
-            border-bottom: 1px solid var(--border);
-            transition: background .1s;
+            display: flex; align-items: center; gap: 8px;
+            padding: 7px 10px; font-size: .83rem; color: var(--text);
+            cursor: pointer; border-bottom: 1px solid var(--border); transition: background .1s;
         }
         .rm-list li:last-child { border-bottom: none; }
         .rm-list li:hover { background: rgba(42,91,215,.06); }
         .rm-list li.selected { background: rgba(42,91,215,.1); color: var(--accent); font-weight: 600; }
         .rm-list li .rm-emp-dot {
             width: 7px; height: 7px; border-radius: 50%;
-            background: var(--muted); flex-shrink: 0;
-            transition: background .1s;
+            background: var(--muted); flex-shrink: 0; transition: background .1s;
         }
         .rm-list li.selected .rm-emp-dot { background: var(--accent); }
         .rm-list li.admin-item .rm-emp-dot { background: #7c3aed; }
 
         .rm-list-empty {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 88px;
-            font-size: .8rem;
-            color: var(--muted);
-            font-style: italic;
-            text-align: center;
-            padding: 12px;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 88px; font-size: .8rem; color: var(--muted);
+            font-style: italic; text-align: center; padding: 12px;
         }
 
         /* ── Middle controls ─────────────────────────────────────────────── */
         .rm-controls {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding-top: 24px;   /* visually align with list tops */
-            flex-shrink: 0;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; gap: 8px;
+            padding-top: 24px; flex-shrink: 0;
         }
 
         .rm-btn {
-            width: 36px; height: 36px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: var(--bg);
-            color: var(--text);
-            cursor: pointer;
-            display: flex; align-items: center; justify-content: center;
-            transition: background .12s, border-color .12s, color .12s;
-            font-size: .8rem;
+            width: 36px; height: 36px; border-radius: 8px;
+            border: 1px solid var(--border); background: var(--bg); color: var(--text);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background .12s, border-color .12s, color .12s; font-size: .8rem;
         }
-        .rm-btn:hover:not(:disabled) {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: #fff;
-        }
-        .rm-btn:disabled {
-            opacity: .35;
-            cursor: not-allowed;
-        }
+        .rm-btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .rm-btn:disabled { opacity: .35; cursor: not-allowed; }
         .rm-btn.rm-btn-promote { background: var(--accent); border-color: var(--accent); color: #fff; }
         .rm-btn.rm-btn-promote:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
         .rm-btn.rm-btn-promote:disabled { background: var(--border); border-color: var(--border); color: var(--muted); }
 
-        /* ── Tablet: stack role management panels vertically ─────────────── */
-        @media (max-width: 600px) {
-            .rm-layout {
-                flex-direction: column;
+        /* ── Tablet: keep side-by-side but allow wrap ───────────────────── */
+        @media (max-width: 768px) {
+            .settings-top-row {
+                flex-wrap: wrap;
             }
-            .rm-controls {
+            .settings-top-row .sc-card {
+                flex: 1 1 calc(50% - 7px);
+                min-width: 240px;
+            }
+        }
+
+        /* ── Mobile: stack everything ────────────────────────────────────── */
+        @media (max-width: 600px) {
+            .main { overflow-y: auto; }
+            .settings-page {
+                overflow: visible;
+                flex: unset;
+            }
+            .settings-top-row {
+                flex-direction: column;
+                gap: 14px;
+            }
+            .settings-top-row .sc-card {
+                flex: unset;
+                width: 100%;
+                min-width: 0;
+            }
+            .settings-roles-row {
+                flex: unset;
+            }
+            .settings-roles-row .sc-card {
+                flex: unset;
+                display: block;
+                overflow: hidden;
+            }
+            .settings-roles-row .sc-card.open .sc-body {
+                flex: unset;
+                display: block;
+                overflow: visible;
+            }
+            .settings-roles-row .sc-body-inner {
+                flex: unset;
+                display: block;
+                overflow: visible;
+            }
+            .settings-roles-row .rm-layout {
+                flex: unset;
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 12px;
+            }
+            .settings-roles-row .rm-controls {
+                align-self: unset;
+                width: 100%;
+                padding-top: 0;
                 flex-direction: row;
                 justify-content: center;
-                padding-top: 0;
-                width: 100%;
             }
-            .rm-list {
+            .settings-roles-row .rm-panel {
+                flex: unset;
+                width: 100%;
+                min-height: unset;
+                display: block;
+            }
+            .settings-roles-row .rm-list {
+                flex: unset;
+                min-height: 96px;
                 max-height: min(25vh, 180px);
             }
         }
 
-        /* ── Mobile overrides ────────────────────────────────────────────── */
         @media (max-width: 480px) {
             .settings-page { padding: 14px 12px calc(14px + env(safe-area-inset-bottom, 0px)); }
             .settings-page h1 { font-size: 1.1rem; margin-bottom: 12px; }
@@ -282,161 +348,172 @@
             .sc-body  { padding: 0 14px 14px; }
             .field-row select,
             .field-row input[type=password] { max-width: 100%; }
-            .rm-list { max-height: min(22vh, 160px); }
+            .settings-roles-row .rm-list { max-height: min(22vh, 160px); }
             .rm-btn { width: 32px; height: 32px; }
         }
     </style>
 </head>
-<body style="background:var(--main-bg);">
+<body>
 
-<div class="settings-page">
+<th:block th:replace="~{admin/layout :: mobile-chrome}"></th:block>
+<th:block th:replace="~{admin/layout :: sidebar}"></th:block>
 
-    <a href="/" class="back-link">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-        Back to Dashboard
-    </a>
-    <h1>Admin Settings</h1>
+<main class="main">
+    <th:block th:replace="~{admin/layout :: topbar}"></th:block>
 
-    <!-- ── Card 1: Restricted Vacation Types ─────────────────────────── -->
-    <div class="sc-card open" id="card-restricted">
-        <div class="sc-header" data-target="card-restricted">
-            <div class="sc-header-left">
-                <div class="sc-icon">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+    <!-- ── Settings content ──────────────────────────────────────────── -->
+    <div class="settings-page">
+        <h1>Admin Settings</h1>
+
+        <!-- ── Top row: Card 1 + Card 2 side by side ─────────────────────── -->
+        <div class="settings-top-row">
+
+        <!-- ── Card 1: Restricted Vacation Types ─────────────────────────── -->
+        <div class="sc-card" id="card-restricted">
+            <div class="sc-header" data-target="card-restricted">
+                <div class="sc-header-left">
+                    <div class="sc-icon">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                    </div>
+                    <div>
+                        <div class="sc-title">Restricted Vacation Types</div>
+                        <div class="sc-subtitle">Disable types employees can request</div>
+                    </div>
                 </div>
-                <div>
-                    <div class="sc-title">Restricted Vacation Types</div>
-                    <div class="sc-subtitle">Disable types employees can request</div>
+                <svg class="sc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="sc-body">
+                <div class="sc-body-inner">
+                    <p class="sc-desc">Checked types are <strong>disabled</strong> — employees cannot request them and they are hidden from the UI.</p>
+                    <div id="typeList">
+                        <div th:each="vt : ${vacationTypes}" class="type-row">
+                            <span class="type-code" th:text="${vt.code}">V</span>
+                            <span class="type-label" th:text="${vt.label}">Vacation</span>
+                            <input type="checkbox" class="type-toggle"
+                                   th:value="${vt.code}"
+                                   th:checked="${restrictedTypes.contains(vt.code)}"
+                                   th:id="'chk_' + ${vt.code}">
+                            <label th:for="'chk_' + ${vt.code}" style="font-size:.78rem;color:var(--muted);flex-shrink:0;">Restrict</label>
+                        </div>
+                    </div>
+                    <button class="btn-save" id="saveRestrictedBtn" style="margin-top:16px;">Save Restricted Types</button>
+                    <div class="alert" id="restrictedAlert"></div>
                 </div>
             </div>
-            <svg class="sc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <div class="sc-body">
-            <div class="sc-body-inner">
-                <p class="sc-desc">Checked types are <strong>disabled</strong> — employees cannot request them and they are hidden from the UI.</p>
-                <div id="typeList">
-                    <div th:each="vt : ${vacationTypes}" class="type-row">
-                        <span class="type-code" th:text="${vt.code}">V</span>
-                        <span class="type-label" th:text="${vt.label}">Vacation</span>
-                        <input type="checkbox" class="type-toggle"
-                               th:value="${vt.code}"
-                               th:checked="${restrictedTypes.contains(vt.code)}"
-                               th:id="'chk_' + ${vt.code}">
-                        <label th:for="'chk_' + ${vt.code}" style="font-size:.78rem;color:var(--muted);flex-shrink:0;">Restrict</label>
+
+        <!-- ── Card 2: Password Reset ─────────────────────────────────────── -->
+        <div class="sc-card" id="card-password">
+            <div class="sc-header" data-target="card-password">
+                <div class="sc-header-left">
+                    <div class="sc-icon">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <div>
+                        <div class="sc-title">Password Reset</div>
+                        <div class="sc-subtitle">Update admin or employee account passwords</div>
                     </div>
                 </div>
-                <button class="btn-save" id="saveRestrictedBtn" style="margin-top:16px;">Save Restricted Types</button>
-                <div class="alert" id="restrictedAlert"></div>
+                <svg class="sc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="sc-body">
+                <div class="sc-body-inner">
+
+                    <!-- Admin account -->
+                    <div class="pw-section">
+                        <p class="pw-section-title">Admin Account</p>
+                        <div class="field-row">
+                            <label for="adminNewPassword">New Password (min 6 chars)</label>
+                            <input type="password" id="adminNewPassword" placeholder="Enter new admin password" autocomplete="new-password">
+                        </div>
+                        <button class="btn-save" id="resetAdminPasswordBtn">Reset Admin Password</button>
+                        <div class="alert" id="adminPasswordAlert"></div>
+                    </div>
+
+                    <hr class="pw-divider">
+
+                    <!-- Employee accounts -->
+                    <div class="pw-section">
+                        <p class="pw-section-title">Employee Account</p>
+                        <div class="field-row">
+                            <label for="employeeSelect">Employee</label>
+                            <select id="employeeSelect">
+                                <option value="">— Loading employees… —</option>
+                            </select>
+                        </div>
+                        <div class="field-row">
+                            <label for="employeeNewPassword">New Password (min 6 chars)</label>
+                            <input type="password" id="employeeNewPassword" placeholder="Enter new employee password" autocomplete="new-password">
+                        </div>
+                        <button class="btn-save" id="resetEmployeePasswordBtn">Reset Employee Password</button>
+                        <div class="alert" id="employeePasswordAlert"></div>
+                    </div>
+
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- ── Card 2: Password Reset ─────────────────────────────────────── -->
-    <div class="sc-card" id="card-password">
-        <div class="sc-header" data-target="card-password">
-            <div class="sc-header-left">
-                <div class="sc-icon">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div><!-- /.settings-top-row -->
+
+        <!-- ── Card 3: Role Management — full width, fills remaining height ── -->
+        <div class="settings-roles-row">
+        <div class="sc-card open" id="card-roles">
+            <div class="sc-header" data-target="card-roles">
+                <div class="sc-header-left">
+                    <div class="sc-icon">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div>
+                        <div class="sc-title">Role Management</div>
+                        <div class="sc-subtitle">Promote employees to the Admin role</div>
+                    </div>
                 </div>
-                <div>
-                    <div class="sc-title">Password Reset</div>
-                    <div class="sc-subtitle">Update admin or employee account passwords</div>
+                <svg class="sc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div class="sc-body">
+                <div class="sc-body-inner">
+                    <p class="sc-desc">Select one or more employees from the left panel and use the arrow button to promote them to the <strong>Admin</strong> role. Promoted employees will appear in the right panel.</p>
+
+                    <div class="rm-layout">
+
+                        <!-- Left panel: all employees -->
+                        <div class="rm-panel">
+                            <p class="rm-panel-label">Employees</p>
+                            <ul class="rm-list" id="rmEmployeeList">
+                                <li><span class="rm-list-empty">Loading employees…</span></li>
+                            </ul>
+                        </div>
+
+                        <!-- Middle controls -->
+                        <div class="rm-controls">
+                            <button class="rm-btn rm-btn-promote" id="rmPromoteBtn" disabled title="Promote selected to Admin">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                            </button>
+                            <button class="rm-btn" id="rmDemoteBtn" disabled title="Remove Admin role">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                            </button>
+                        </div>
+
+                        <!-- Right panel: admins -->
+                        <div class="rm-panel">
+                            <p class="rm-panel-label">Admins</p>
+                            <ul class="rm-list" id="rmAdminList">
+                                <li><span class="rm-list-empty">No admins promoted yet</span></li>
+                            </ul>
+                        </div>
+
+                    </div><!-- /.rm-layout -->
+
+                    <div class="alert" id="rmAlert" style="margin-top:12px;"></div>
                 </div>
             </div>
-            <svg class="sc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <div class="sc-body">
-            <div class="sc-body-inner">
+        </div><!-- /.settings-roles-row -->
 
-                <!-- Admin account -->
-                <div class="pw-section">
-                    <p class="pw-section-title">Admin Account</p>
-                    <div class="field-row">
-                        <label for="adminNewPassword">New Password (min 6 chars)</label>
-                        <input type="password" id="adminNewPassword" placeholder="Enter new admin password" autocomplete="new-password">
-                    </div>
-                    <button class="btn-save" id="resetAdminPasswordBtn">Reset Admin Password</button>
-                    <div class="alert" id="adminPasswordAlert"></div>
-                </div>
+    </div><!-- /.settings-page -->
+</main>
 
-                <hr class="pw-divider">
-
-                <!-- Employee accounts -->
-                <div class="pw-section">
-                    <p class="pw-section-title">Employee Account</p>
-                    <div class="field-row">
-                        <label for="employeeSelect">Employee</label>
-                        <select id="employeeSelect">
-                            <option value="">— Loading employees… —</option>
-                        </select>
-                    </div>
-                    <div class="field-row">
-                        <label for="employeeNewPassword">New Password (min 6 chars)</label>
-                        <input type="password" id="employeeNewPassword" placeholder="Enter new employee password" autocomplete="new-password">
-                    </div>
-                    <button class="btn-save" id="resetEmployeePasswordBtn">Reset Employee Password</button>
-                    <div class="alert" id="employeePasswordAlert"></div>
-                </div>
-
-            </div>
-        </div>
-    </div>
-
-    <!-- ── Card 3: Role Management ───────────────────────────────────────── -->
-    <div class="sc-card" id="card-roles">
-        <div class="sc-header" data-target="card-roles">
-            <div class="sc-header-left">
-                <div class="sc-icon">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                </div>
-                <div>
-                    <div class="sc-title">Role Management</div>
-                    <div class="sc-subtitle">Promote employees to the Admin role</div>
-                </div>
-            </div>
-            <svg class="sc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <div class="sc-body">
-            <div class="sc-body-inner">
-                <p class="sc-desc">Select one or more employees from the left panel and use the arrow button to promote them to the <strong>Admin</strong> role. Promoted employees will appear in the right panel.</p>
-
-                <div class="rm-layout">
-
-                    <!-- Left panel: all employees -->
-                    <div class="rm-panel">
-                        <p class="rm-panel-label">Employees</p>
-                        <ul class="rm-list" id="rmEmployeeList">
-                            <li><span class="rm-list-empty">Loading employees…</span></li>
-                        </ul>
-                    </div>
-
-                    <!-- Middle controls -->
-                    <div class="rm-controls">
-                        <button class="rm-btn rm-btn-promote" id="rmPromoteBtn" disabled title="Promote selected to Admin">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                        </button>
-                        <button class="rm-btn" id="rmDemoteBtn" disabled title="Remove Admin role">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                        </button>
-                    </div>
-
-                    <!-- Right panel: admins -->
-                    <div class="rm-panel">
-                        <p class="rm-panel-label">Admins</p>
-                        <ul class="rm-list" id="rmAdminList">
-                            <li><span class="rm-list-empty">No admins promoted yet</span></li>
-                        </ul>
-                    </div>
-
-                </div><!-- /.rm-layout -->
-
-                <div class="alert" id="rmAlert" style="margin-top:12px;"></div>
-            </div>
-        </div>
-    </div>
-
-</div><!-- /.settings-page -->
-
+<script th:src="@{/static/holiday_agent_admin.js}"></script>
 <script>
 (function () {
     'use strict';
@@ -452,16 +529,14 @@
 
     // ── Role Management widget ────────────────────────────────────────────
 
-    /* In-memory state: arrays of {username, employee_name} */
-    var rmEmployees = [];   /* left panel  — employees not yet promoted */
-    var rmAdmins    = [];   /* right panel — promoted employees */
+    var rmEmployees = [];
+    var rmAdmins    = [];
 
     var rmEmployeeList = document.getElementById('rmEmployeeList');
     var rmAdminList    = document.getElementById('rmAdminList');
     var rmPromoteBtn   = document.getElementById('rmPromoteBtn');
     var rmDemoteBtn    = document.getElementById('rmDemoteBtn');
 
-    /* Load both panels from the server — single source of truth is secret.json */
     function rmLoadEmployees() {
         Promise.all([
             fetch('/api/admin/settings/employee-credentials').then(function (r) { return r.json(); }),
@@ -477,7 +552,6 @@
         });
     }
 
-    /* Render both panels from state */
     function rmRender() {
         rmRenderList(rmEmployeeList, rmEmployees, 'employee');
         rmRenderList(rmAdminList,    rmAdmins,    'admin');
@@ -521,32 +595,24 @@
         rmDemoteBtn.disabled  = adminSelected === 0;
     }
 
-    /* Collect selected items from a list against a state array */
     function rmGetSelected(ulEl, stateArr) {
         var result = [];
         ulEl.querySelectorAll('li.selected').forEach(function (li) {
             var idx = Array.prototype.indexOf.call(ulEl.querySelectorAll('li'), li);
-            if (idx >= 0 && idx < stateArr.length) {
-                result.push(stateArr[idx]);
-            }
+            if (idx >= 0 && idx < stateArr.length) result.push(stateArr[idx]);
         });
         return result;
     }
 
-    /* Move selected items from left → right, persisted to secret.json */
     rmPromoteBtn.addEventListener('click', function () {
         var toPromote = rmGetSelected(rmEmployeeList, rmEmployees);
         if (toPromote.length === 0) return;
-
         rmPromoteBtn.disabled = true;
         rmDemoteBtn.disabled  = true;
-
-        var usernames = toPromote.map(function (e) { return e.username; });
-
         fetch('/api/admin/settings/promote', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ usernames: usernames })
+            body: JSON.stringify({ usernames: toPromote.map(function (e) { return e.username; }) })
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
@@ -554,11 +620,7 @@
                 rmShowAlert('rmAlert', data.error, false);
                 rmSyncButtons();
             } else {
-                /* Reload both panels from server to reflect persisted state */
-                var msg = data.message;
-                if (data.errors && data.errors.length) {
-                    msg += ' Errors: ' + data.errors.join('; ');
-                }
+                var msg = data.message + (data.errors && data.errors.length ? ' Errors: ' + data.errors.join('; ') : '');
                 rmLoadEmployees();
                 rmShowAlert('rmAlert', msg, true);
             }
@@ -569,20 +631,15 @@
         });
     });
 
-    /* Move selected items from right → left, persisted to secret.json */
     rmDemoteBtn.addEventListener('click', function () {
         var toDemote = rmGetSelected(rmAdminList, rmAdmins);
         if (toDemote.length === 0) return;
-
         rmPromoteBtn.disabled = true;
         rmDemoteBtn.disabled  = true;
-
-        var usernames = toDemote.map(function (e) { return e.username; });
-
         fetch('/api/admin/settings/demote', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ usernames: usernames })
+            body: JSON.stringify({ usernames: toDemote.map(function (e) { return e.username; }) })
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
@@ -590,11 +647,7 @@
                 rmShowAlert('rmAlert', data.error, false);
                 rmSyncButtons();
             } else {
-                /* Reload both panels from server to reflect persisted state */
-                var msg = data.message;
-                if (data.errors && data.errors.length) {
-                    msg += ' Errors: ' + data.errors.join('; ');
-                }
+                var msg = data.message + (data.errors && data.errors.length ? ' Errors: ' + data.errors.join('; ') : '');
                 rmLoadEmployees();
                 rmShowAlert('rmAlert', msg, true);
             }
@@ -613,10 +666,9 @@
         setTimeout(function () { el.style.display = 'none'; }, 5000);
     }
 
-    /* Load on page ready */
     rmLoadEmployees();
 
-    // ── Load employee credentials into the dropdown on page load ──────────
+    // ── Load employee credentials into the dropdown ───────────────────────
     function loadEmployeeDropdown() {
         fetch('/api/admin/settings/employee-credentials')
             .then(function (r) { return r.json(); })
@@ -648,9 +700,7 @@
     // ── Save restricted types ─────────────────────────────────────────────
     document.getElementById('saveRestrictedBtn').addEventListener('click', function () {
         var checked = [];
-        document.querySelectorAll('.type-toggle:checked').forEach(function (cb) {
-            checked.push(cb.value);
-        });
+        document.querySelectorAll('.type-toggle:checked').forEach(function (cb) { checked.push(cb.value); });
         fetch('/api/admin/settings/restricted-types', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -663,10 +713,7 @@
     // ── Reset admin password ──────────────────────────────────────────────
     document.getElementById('resetAdminPasswordBtn').addEventListener('click', function () {
         var pwd = document.getElementById('adminNewPassword').value;
-        if (!pwd || pwd.length < 6) {
-            showAlert('adminPasswordAlert', 'Password must be at least 6 characters.', false);
-            return;
-        }
+        if (!pwd || pwd.length < 6) { showAlert('adminPasswordAlert', 'Password must be at least 6 characters.', false); return; }
         fetch('/api/admin/settings/password-reset', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -681,14 +728,8 @@
     document.getElementById('resetEmployeePasswordBtn').addEventListener('click', function () {
         var username = document.getElementById('employeeSelect').value;
         var pwd      = document.getElementById('employeeNewPassword').value;
-        if (!username) {
-            showAlert('employeePasswordAlert', 'Please select an employee.', false);
-            return;
-        }
-        if (!pwd || pwd.length < 6) {
-            showAlert('employeePasswordAlert', 'Password must be at least 6 characters.', false);
-            return;
-        }
+        if (!username) { showAlert('employeePasswordAlert', 'Please select an employee.', false); return; }
+        if (!pwd || pwd.length < 6) { showAlert('employeePasswordAlert', 'Password must be at least 6 characters.', false); return; }
         fetch('/api/admin/settings/password-reset', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
