@@ -32,7 +32,6 @@ logs/
 # ── Other compose / deploy files (not needed inside the image) ────────────────
 docker-compose.yml
 podman-compose.yml
-render.yaml
 
 # ── Documentation and diagrams ────────────────────────────────────────────────
 README.md

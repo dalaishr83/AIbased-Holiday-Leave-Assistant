@@ -27,28 +27,24 @@ services:
     env_file:
       - .env
     environment:
-      # Ensure the server port matches the exposed container port
+      # Server port — must match the exposed container port
       FLASK_PORT: "8080"
-      # Absolute paths — required so AppState.init() resolves dirs correctly
-      # inside the container regardless of Tomcat's JVM working directory.
+      # Absolute paths so AppState.init() resolves dirs correctly inside the container
       DATA_DIR: "/app/data"
       REPORT_OUTPUT_DIR: "/app/reports"
     volumes:
       - ./data:/app/data:Z
       - ./reports:/app/reports:Z
     restart: always
+    networks:
+      - app-net
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8080/login || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    networks:
-      - app-net
-      - loganalyser_default   # joins the Ollama network so "ollama" DNS resolves
 
 networks:
   app-net:
     driver: bridge
-  loganalyser_default:
-    external: true            # created by the loganalyzer podman-compose stack
