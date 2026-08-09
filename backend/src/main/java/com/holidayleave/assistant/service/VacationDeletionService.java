@@ -94,6 +94,12 @@ public class VacationDeletionService {
         }
 
         long days = requestedWorkingDays.size();
+        if (days == 0) {
+            return new WizardResult(
+                "The selected date range contains no working days (Mon\u2013Fri). " +
+                "Please enter a date range that includes at least one working day.",
+                "vacation_prompt", false, false);
+        }
         p.setDays(days);
         p.setState(WizardState.DELETE_CONFIRM);
 

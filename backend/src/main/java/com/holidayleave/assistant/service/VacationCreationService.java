@@ -69,12 +69,25 @@ public class VacationCreationService {
         if (isCancelled(msg)) return cancel(p);
         String lower = msg.toLowerCase().trim();
         VacationType found = null;
+
+        // Pass 1 — exact code match (highest priority: "E", "PC", "V" …)
         for (VacationType t : vacationTypeService.findAll()) {
-            if (t.label().toLowerCase().contains(lower) || t.code().equalsIgnoreCase(lower)) {
-                found = t;
-                break;
+            if (t.code().equalsIgnoreCase(lower)) { found = t; break; }
+        }
+        // Pass 2 — exact label match ("education", "vacation" …)
+        if (found == null) {
+            for (VacationType t : vacationTypeService.findAll()) {
+                if (t.label().equalsIgnoreCase(lower)) { found = t; break; }
             }
         }
+        // Pass 3 — label substring, only for inputs of 3+ chars to prevent
+        // single-character noise matching (e.g. "e" hitting "Personal Choice Holiday")
+        if (found == null && lower.length() >= 3) {
+            for (VacationType t : vacationTypeService.findAll()) {
+                if (t.label().toLowerCase().contains(lower)) { found = t; break; }
+            }
+        }
+
         if (found == null) {
             return new WizardResult("I don't recognise that leave type. Available: " + typeList(),
                 "vacation_prompt", false, false);
@@ -113,6 +126,12 @@ public class VacationCreationService {
             "End date must be on or after start date (" + p.getStartDate().format(FMT) + ").", "vacation_prompt", false, false);
         p.setEndDate(date);
         long days = countWeekdays(p.getStartDate(), date);
+        if (days == 0) {
+            return new WizardResult(
+                "The selected date range contains no working days (Mon\u2013Fri). " +
+                "Please enter a date range that includes at least one working day.",
+                "vacation_prompt", false, false);
+        }
         p.setDays(days);
         p.setState(WizardState.CONFIRM);
         return new WizardResult(
