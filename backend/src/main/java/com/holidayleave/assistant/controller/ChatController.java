@@ -38,6 +38,7 @@ public class ChatController {
     @Autowired private VacationTypeService typeService;
     @Autowired private AuditService auditService;
     @Autowired private SyncService syncService;
+    @Autowired private SlackNotificationService slackNotificationService;
 
     @PostMapping("/chat")
     public ResponseEntity<Map<String, Object>> chat(@RequestBody Map<String, String> body, HttpSession session) {
@@ -173,6 +174,7 @@ public class ChatController {
             auditService.log("vacation_added", actingUser, record.employeeName(),
                 "Added " + record.days() + "d [" + record.leaveType() + "] via chat", "success", "chat");
             syncService.triggerSync();
+            slackNotificationService.notifyPcVacationAdded(record, pending.getLeaveCode(), actingUser);
             appState.removePendingVacation(sessionId);
             return ResponseEntity.ok(reply(
                 "Vacation added for **" + record.employeeName() + "**: " + record.leaveType() +
@@ -209,6 +211,8 @@ public class ChatController {
             auditService.log("vacation_deleted", actingUser, pending.getEmployeeName(),
                 "Deleted vacation via chat", "success", "chat");
             syncService.triggerSync();
+            String deletedLeaveType = resolveLeaveTypeForDelete(allRecords, pending);
+            slackNotificationService.notifyVacationDeleted(pending, deletedLeaveType, actingUser);
             appState.removePendingVacation(sessionId);
             return ResponseEntity.ok(reply(
                 "Vacation deleted for **" + pending.getEmployeeName() + "** (" + cleared + " cells cleared).", "text"));
@@ -241,6 +245,18 @@ public class ChatController {
                 Files.copy(Paths.get(masterPath), Paths.get(workingPath), StandardCopyOption.REPLACE_EXISTING);
             }
         }
+    }
+
+    private String resolveLeaveTypeForDelete(List<LeaveRecord> records, PendingVacation pending) {
+        for (LeaveRecord r : records) {
+            if (!r.employeeName().equalsIgnoreCase(pending.getEmployeeName())) continue;
+            // Match any record whose date range overlaps the deleted range
+            if (!r.endDate().isBefore(pending.getStartDate())
+                    && !r.startDate().isAfter(pending.getEndDate())) {
+                return r.leaveType();
+            }
+        }
+        return "Unknown";
     }
 
     private Map<String, Object> reply(String text, String type) {

@@ -59,6 +59,24 @@ public class AppProperties {
     public Box getBox() { return box; }
     public void setBox(Box box) { this.box = box; }
 
+    private Slack slack = new Slack();
+
+    public Slack getSlack() { return slack; }
+    public void setSlack(Slack slack) { this.slack = slack; }
+
+    public static class Slack {
+        private boolean enabled = false;
+        private String webhookUrl = "";
+        private String pcLeaveCode = "PC";
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getWebhookUrl() { return webhookUrl; }
+        public void setWebhookUrl(String webhookUrl) { this.webhookUrl = webhookUrl; }
+        public String getPcLeaveCode() { return pcLeaveCode; }
+        public void setPcLeaveCode(String pcLeaveCode) { this.pcLeaveCode = pcLeaveCode; }
+    }
+
     public static class Box {
         private boolean enabled = false;
         private String clientId = "";
