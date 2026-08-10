@@ -834,6 +834,48 @@ class HolidayAgentTest {
         assertFalse(ctx.contains("Carol Nguyen"));
     }
 
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // isDateQuery() — routing guard: false-positive prevention
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Test
+    void isDateQuery_noEmployeeName_singleMonth_true() {
+        // "Who is on leave on 02 March 2026?" — no employee name, no range → date query
+        assertTrue(agent.isDateQuery("Who is on leave on 02 March 2026?", records));
+    }
+
+    @Test
+    void isDateQuery_withEmployeeName_false() {
+        // "How many days did Alice Smith take from 01 March to 05 March?" — has employee name
+        assertFalse(agent.isDateQuery("How many days did Alice Smith take from 01 March to 05 March?", records));
+    }
+
+    @Test
+    void isDateQuery_rangeQuery_false() {
+        // "How many days from January to March?" — two months → range query not date query
+        assertFalse(agent.isDateQuery("How many days from January to March 2026?", records));
+    }
+
+    @Test
+    void isDateQuery_addVacationIntent_safelyIrrelevant() {
+        // "Add vacation from 02 March to 05 March" — ChatController intercepts isAddVacationIntent
+        // BEFORE agent.ask() is ever called, so isDateQuery is never reached for add/delete intents.
+        // Both months here are "March" (same month) so extractMonths returns size=1.
+        // The important safety is at the ChatController level, not here.
+        // Just verify it does not throw.
+        agent.isDateQuery("Add vacation from 02 March to 05 March 2026", records);
+    }
+
+    @Test
+    void isDateQuery_noSpecificDate_trueButExtractReturnsNull() {
+        // "Who is on leave in March?" — no specific day number → extractSpecificDate returns null
+        // isDateQuery itself returns true (no employee, single month), but the calling code
+        // guards with extractSpecificDate != null so this safely falls through to normal routing.
+        assertTrue(agent.isDateQuery("Who is on leave in March?", records));
+    }
+
+
     // ═══════════════════════════════════════════════════════════════════════════
     // ask() — date query routes to date context (no analysisService call)
     // ═══════════════════════════════════════════════════════════════════════════

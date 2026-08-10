@@ -88,11 +88,11 @@ public class OpenAIAdapter implements LLMService {
 "DATE-QUERY shape — used when the question asks who is on leave on a specific date:\n" +
 "  query_type                   : always \"date_query\".\n" +
 "  query_date                   : the requested date in YYYY-MM-DD format.\n" +
-"  query_date_display           : the requested date in human-readable form (e.g. \"2 March 2026\").\n" +
+"  query_date_display           : the requested date in human-readable form (e.g. \"[D Month YYYY]\").\n" +
 "  today                        : today's date (YYYY-MM-DD).\n" +
 "  employees_on_leave           : array of employees whose leave covers query_date. Each entry:\n" +
 "      employee_name : employee's full name.\n" +
-"      leave_type    : leave type code (P, PC, V, H, E, O).\n" +
+"      leave_type    : leave type code or label (e.g. 'P', 'Public Holiday', 'V', 'Vacation').\n" +
 "      start_date    : leave span start date.\n" +
 "      end_date      : leave span end date.\n" +
 "      days          : number of leave days in that span.\n" +
@@ -101,8 +101,14 @@ public class OpenAIAdapter implements LLMService {
 "  total_employees_checked      : total number of distinct employees in the data for that year.\n" +
 "  employees_not_on_leave_count : total_employees_checked minus employees_on_leave_count.\n\n" +
 "When query_type is \"date_query\":\n" +
+"  - The employees_on_leave array is the COMPLETE and AUTHORITATIVE list for that date.\n" +
+"    It was computed by the backend from master data — do not add, remove, or summarise entries.\n" +
 "  - If employees_on_leave_count is 0: say no employees are on leave on that date.\n" +
-"  - Otherwise: list every employee from employees_on_leave with their leave type.\n" +
+"  - Otherwise: list EVERY SINGLE entry in employees_on_leave — all employees_on_leave_count of them.\n" +
+"    Do not stop early, do not say 'and others', do not abbreviate the list.\n" +
+"    The response format brevity rule is SUSPENDED for date queries — completeness is mandatory.\n" +
+"  - For each employee state their name and leave type. Use a bullet list if count > 3.\n" +
+"  - After the list, state the total: 'X employee(s) are on leave on [date_display].'\n" +
 "  - Do NOT invent employees or dates not present in employees_on_leave.\n" +
 "  - Do NOT say the information is unavailable — the context IS the complete answer.\n\n" +
 "GENERIC shape — used when no specific employee was identified:\n" +
@@ -191,8 +197,8 @@ public class OpenAIAdapter implements LLMService {
 "A: [Employee] has N leave days this year.\n\n" +
 "Q: Who is on leave on [Date]?\n" +
 "   context: query_type=date_query, query_date_display=[Date],\n" +
-"   employees_on_leave=[{employee_name:Alice,leave_type:V,...},{employee_name:Bob,leave_type:P,...}]\n" +
-"A: Alice (Vacation) and Bob (Public Holiday) are on leave on [Date].\n\n" +
+"   employees_on_leave=[{employee_name:[EmpA],leave_type:[TypeX],...},{employee_name:[EmpB],leave_type:[TypeY],...}]\n" +
+"A: [EmpA] ([TypeX label]) and [EmpB] ([TypeY label]) are on leave on [Date].\n\n" +
 "Q: Who is on leave on [Date]?\n" +
 "   context: query_type=date_query, employees_on_leave=[] (empty)\n" +
 "A: No employees are on leave on [Date].\n\n" +

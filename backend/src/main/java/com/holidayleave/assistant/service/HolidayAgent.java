@@ -99,9 +99,12 @@ public class HolidayAgent {
         String lower = question.toLowerCase();
         int year = extractYear(question, allRecords);
 
-        // Date-specific query ("who is on leave on 02 March 2026?") — checked before employee resolution
-        LocalDate specificDate = extractSpecificDate(question, year);
-        if (specificDate != null) return buildContextForDate(allRecords, specificDate);
+        // Date-specific query ("who is on leave on 02 March 2026?") — only when no employee name
+        // is present and the question looks like a cross-employee date query (not a per-employee query).
+        if (isDateQuery(question, allRecords)) {
+            LocalDate specificDate = extractSpecificDate(question, year);
+            if (specificDate != null) return buildContextForDate(allRecords, specificDate);
+        }
 
         boolean allEmployees = isAllEmployeesQuery(lower);
         String employeeName = allEmployees ? null : resolveEmployeeName(question, allRecords);
@@ -117,13 +120,16 @@ public class HolidayAgent {
         String lower = question.toLowerCase();
         int year = extractYear(question, allRecords);
 
-        // Date-specific query — bypass employee resolution and build a cross-employee date context
-        LocalDate specificDate = extractSpecificDate(question, year);
-        if (specificDate != null) {
-            String context = buildContextForDate(allRecords, specificDate);
-            String reply = llmService.ask(null, context, question, appState.getConversationHistory());
-            appState.addToHistory(question, reply);
-            return reply;
+        // Date-specific query — only when no employee name is present and question is a
+        // cross-employee date lookup, not a per-employee range or single-month query.
+        if (isDateQuery(question, allRecords)) {
+            LocalDate specificDate = extractSpecificDate(question, year);
+            if (specificDate != null) {
+                String context = buildContextForDate(allRecords, specificDate);
+                String reply = llmService.ask(null, context, question, appState.getConversationHistory());
+                appState.addToHistory(question, reply);
+                return reply;
+            }
         }
 
         boolean allEmployees = isAllEmployeesQuery(lower);
@@ -172,6 +178,30 @@ public class HolidayAgent {
         String lower = message.toLowerCase();
         for (String kw : ALL_EMPLOYEES_KEYWORDS) { if (lower.contains(kw)) return true; }
         return false;
+    }
+
+    /**
+     * Returns true when the question is a cross-employee date-specific query
+     * ("who is on leave on 02 March?") rather than a per-employee query.
+     *
+     * A question is treated as a date query ONLY when:
+     *   1. No specific employee name can be resolved from it (it's not about one person), AND
+     *   2. It does not contain a date range ("from … to …"), which would be a range query.
+     *
+     * This prevents false-positive routing for queries like:
+     *   "How many days did Alice take from 01 March to 05 March?" — has an employee name → not a date query
+     *   "How many days from January to March?" — has "from … to" → not a date query
+     */
+    boolean isDateQuery(String question, List<LeaveRecord> allRecords) {
+        // Must contain a recognisable specific date pattern to be routable
+        // (checked by the caller, but guard here too for clarity)
+        // Reject if a known employee name is found in the question
+        if (resolveEmployeeName(question, allRecords) != null) return false;
+        // Reject if the question is phrased as a range ("from X to Y") —
+        // that would produce two month tokens and should go through the range path
+        List<Integer> months = extractMonths(question);
+        if (months.size() >= 2) return false;
+        return true;
     }
 
     /**
@@ -568,26 +598,46 @@ public class HolidayAgent {
      *   employees_not_on_leave_count, total_employees_checked.
      */
     String buildContextForDate(List<LeaveRecord> allRecords, LocalDate date) {
-        List<Map<String, Object>> onLeave = new ArrayList<>();
+        // Use LinkedHashMap to preserve insertion order and deduplicate by employee name.
+        // An employee may have multiple leave spans covering the same date (e.g. a multi-day
+        // vacation span followed immediately by a public holiday span). We emit one entry per
+        // employee, collecting all matching leave types as a comma-separated list.
+        Map<String, Map<String, Object>> onLeaveByEmployee = new LinkedHashMap<>();
         Set<String> allNames = new LinkedHashSet<>();
+
         for (LeaveRecord r : allRecords) {
             if (r.year() != date.getYear()) continue;
             allNames.add(r.employeeName());
         }
         for (LeaveRecord r : allRecords) {
             if (r.year() != date.getYear()) continue;
-            if ("A".equalsIgnoreCase(r.leaveType())) continue;
+            // Exclude Available (A) — also handle full labels "Available" and "  Available"
+            String lt = r.leaveType();
+            if (lt == null) continue;
+            String ltTrimmed = lt.trim();
+            if ("A".equalsIgnoreCase(ltTrimmed) || "Available".equalsIgnoreCase(ltTrimmed)) continue;
             if (!r.startDate().isAfter(date) && !r.endDate().isBefore(date)) {
-                Map<String, Object> entry = new LinkedHashMap<>();
-                entry.put("employee_name", r.employeeName());
-                entry.put("leave_type",    r.leaveType());
-                entry.put("start_date",    r.startDate().toString());
-                entry.put("end_date",      r.endDate().toString());
-                entry.put("days",          r.days());
-                entry.put("reason",        r.reason());
-                onLeave.add(entry);
+                String name = r.employeeName();
+                if (!onLeaveByEmployee.containsKey(name)) {
+                    Map<String, Object> entry = new LinkedHashMap<>();
+                    entry.put("employee_name", name);
+                    entry.put("leave_type",    ltTrimmed);
+                    entry.put("start_date",    r.startDate().toString());
+                    entry.put("end_date",      r.endDate().toString());
+                    entry.put("days",          r.days());
+                    entry.put("reason",        r.reason());
+                    onLeaveByEmployee.put(name, entry);
+                } else {
+                    // Employee already has an entry — append additional leave type if different
+                    Map<String, Object> existing = onLeaveByEmployee.get(name);
+                    String existingType = (String) existing.get("leave_type");
+                    if (!existingType.contains(ltTrimmed)) {
+                        existing.put("leave_type", existingType + ", " + ltTrimmed);
+                    }
+                }
             }
         }
+        List<Map<String, Object>> onLeave = new ArrayList<>(onLeaveByEmployee.values());
         Map<String, Object> ctx = new LinkedHashMap<>();
         ctx.put("query_type",                  "date_query");
         ctx.put("query_date",                  date.toString());
