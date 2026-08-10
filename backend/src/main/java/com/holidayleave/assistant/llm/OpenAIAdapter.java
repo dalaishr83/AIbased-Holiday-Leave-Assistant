@@ -46,15 +46,18 @@ public class OpenAIAdapter implements LLMService {
 "  'P', 'public holiday', 'Public Holiday', 'bank holiday' → code P  → use by_type[\"P\"]  / by_month_by_type[m][\"P\"]\n" +
 "  Never substitute P for PC or PC for P.\n\n" +
 "GENERIC vs TYPE-SPECIFIC:\n" +
-"  GENERIC query (apply Rule 1 or Rule 3): user says 'leave', 'leaves', 'days off', 'time off',\n" +
-"    'holiday', 'holidays', 'vacation', 'Vacation leave', or any phrase without naming a specific code.\n" +
+"  GENERIC query (apply Rule 1 or Rule 3): user says any of:\n" +
+"    'leave', 'leaves', 'leave days', 'leaves days', 'days', 'how many days',\n" +
+"    'days off', 'time off', 'holiday', 'holidays', 'vacation', 'Vacation leave',\n" +
+"    or any phrase that does NOT name a specific leave code.\n" +
 "    Generic = ALL non-A types (P + PC + V + H + E + O combined).\n" +
 "  TYPE-SPECIFIC query (apply Rule 2 or Rule 4): user explicitly names one of:\n" +
 "    a code: PC, V, P, H, E, O\n" +
 "    or an unambiguous full label: 'Personal Choice Holiday', 'Public Holiday', 'Education', 'Other leave',\n" +
 "    'V leave', 'PC leave', 'vacation type V', 'type V'\n" +
 "  NOTE: 'vacation' alone is GENERIC — treat it as all non-A types (Rule 1 / Rule 3).\n" +
-"  Only 'V leave', 'type V', or 'vacation type V' are type-specific for code V.\n\n" +
+"  Only 'V leave', 'type V', or 'vacation type V' are type-specific for code V.\n" +
+"  NOTE: 'days' or 'how many days' without a leave code is GENERIC — apply Rule 1 or Rule 3.\n\n" +
 
 "=== CONTEXT FIELDS ===\n" +
 "The <context> block is JSON with one of three shapes:\n\n" +
