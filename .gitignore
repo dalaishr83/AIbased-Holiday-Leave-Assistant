@@ -10,6 +10,7 @@ backend/target/
 backend/.mvn/wrapper/maven-wrapper.jar
 
 # ── IDE and OS files ──────────────────────────────────────────────────────────
+.bob/
 .idea/
 *.iml
 *.iws

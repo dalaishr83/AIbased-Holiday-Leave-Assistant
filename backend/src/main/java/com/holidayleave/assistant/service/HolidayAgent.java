@@ -65,6 +65,20 @@ public class HolidayAgent {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /** Returns the raw context JSON that would be sent to the LLM for the given question, without calling the LLM. */
+    public String buildContext(String question, List<LeaveRecord> allRecords) {
+        String lower = question.toLowerCase();
+        int year = extractYear(question, allRecords);
+        boolean allEmployees = isAllEmployeesQuery(lower);
+        String employeeName = allEmployees ? null : resolveEmployeeName(question, allRecords);
+        if (!allEmployees && employeeName == null) {
+            employeeName = resolveEmployeeNameFromHistory(appState.getConversationHistory(), allRecords);
+        }
+        if (allEmployees) return buildContextForAll(allRecords, year);
+        if (employeeName != null) return buildContextForEmployee(allRecords, employeeName, year, question);
+        return buildGenericContext(allRecords, year);
+    }
+
     public String ask(String question, List<LeaveRecord> allRecords) {
         String lower = question.toLowerCase();
         int year = extractYear(question, allRecords);
@@ -176,38 +190,155 @@ public class HolidayAgent {
         LeaveAnalysisResult analysis = analysisService.analyse(allRecords, employeeName, year);
         double consumed = analysisService.consumedToDate(empRecords);
 
-        Integer requestedMonth = extractMonth(question);
+        List<Integer> requestedMonths = extractMonths(question);
+        Integer startMonth = requestedMonths.isEmpty() ? null : requestedMonths.get(0);
+        Integer endMonth   = requestedMonths.size() > 1 ? requestedMonths.get(1) : null;
+
+        // Normalise: ensure startMonth <= endMonth so "March to January" is treated as Jan–Mar.
+        if (startMonth != null && endMonth != null && startMonth > endMonth) {
+            Integer tmp = startMonth; startMonth = endMonth; endMonth = tmp;
+        }
+
         Map<Integer, Double> byMonth = analysis.byMonth();
         Map<String, Double> byType  = analysis.byType();
+        List<LeaveRecord> recordsForContext = empRecords;
 
-        if (requestedMonth != null) {
+        if (startMonth != null && endMonth != null) {
+            // ── RANGE PATH: aggregate all months from startMonth through endMonth inclusive ──
+
+            // 1. Collect every month number in the range.
+            List<Integer> rangeMonths = new ArrayList<>();
+            for (int m = startMonth; m <= endMonth; m++) rangeMonths.add(m);
+
+            // 2. Build byMonth map for the range (all-types totals — used for total-leave questions).
+            Map<Integer, Double> rangeByMonth = new LinkedHashMap<>();
+            double rangeAllTypesTotal = 0.0;
+            for (int m : rangeMonths) {
+                double val = byMonth.containsKey(m) ? byMonth.get(m) : 0.0;
+                rangeByMonth.put(m, val);
+                rangeAllTypesTotal += val;
+            }
+            byMonth = rangeByMonth;
+
+            // 3. Date window covering the full range.
+            LocalDate rangeStart = LocalDate.of(year, startMonth, 1);
+            LocalDate rangeEnd   = LocalDate.of(year, endMonth, 1)
+                                       .withDayOfMonth(LocalDate.of(year, endMonth, 1).lengthOfMonth());
+
+            // 4. Compute proportional byType and per-month-by-type across the entire range window.
+            Map<String, Double> rangeByType = new LinkedHashMap<>();
+            // byMonthByType: month-number → (leaveType → proportional days)
+            Map<Integer, Map<String, Double>> byMonthByType = new LinkedHashMap<>();
+            for (int m : rangeMonths) byMonthByType.put(m, new LinkedHashMap<>());
+            List<LeaveRecord> rangeRecords = new ArrayList<>();
+            for (LeaveRecord r : empRecords) {
+                if (r.endDate().isBefore(rangeStart) || r.startDate().isAfter(rangeEnd)) continue;
+                rangeRecords.add(r);
+                LocalDate oStart = r.startDate().isBefore(rangeStart) ? rangeStart : r.startDate();
+                LocalDate oEnd   = r.endDate().isAfter(rangeEnd)       ? rangeEnd   : r.endDate();
+                long totalWd   = countWorkingDays(r.startDate(), r.endDate());
+                long overlapWd = countWorkingDays(oStart, oEnd);
+                double share = totalWd > 0 ? r.days() * ((double) overlapWd / totalWd) : 0.0;
+                if (share > 0) {
+                    Double existing = rangeByType.get(r.leaveType());
+                    rangeByType.put(r.leaveType(), (existing != null ? existing : 0.0) + share);
+                }
+                // Per-month-by-type: distribute this record's days proportionally to each range month
+                for (int m : rangeMonths) {
+                    LocalDate mStart = LocalDate.of(year, m, 1);
+                    LocalDate mEnd   = mStart.withDayOfMonth(mStart.lengthOfMonth());
+                    LocalDate moStart = r.startDate().isBefore(mStart) ? mStart : r.startDate();
+                    LocalDate moEnd   = r.endDate().isAfter(mEnd)      ? mEnd   : r.endDate();
+                    if (moStart.isAfter(moEnd)) continue;
+                    long mOverlapWd = countWorkingDays(moStart, moEnd);
+                    double mShare = totalWd > 0 ? r.days() * ((double) mOverlapWd / totalWd) : 0.0;
+                    if (mShare > 0) {
+                        Map<String, Double> mTypeMap = byMonthByType.get(m);
+                        Double mExisting = mTypeMap.get(r.leaveType());
+                        mTypeMap.put(r.leaveType(), (mExisting != null ? mExisting : 0.0) + mShare);
+                    }
+                }
+            }
+            byType = rangeByType;
+            recordsForContext = rangeRecords;
+
+            // 5. Build record maps and context — range-specific fields.
+            List<Map<String, Object>> recordMaps = new ArrayList<>();
+            for (LeaveRecord r : recordsForContext) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("start_date",  r.startDate().toString());
+                m.put("end_date",    r.endDate().toString());
+                m.put("days",        r.days());
+                m.put("leave_type",  r.leaveType());
+                m.put("reason",      r.reason());
+                m.put("year",        r.year());
+                m.put("month",       r.startDate().getMonthValue());
+                m.put("month_name",  r.startDate().getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH));
+                recordMaps.add(m);
+            }
+
+            Map<String, Object> ctx = new LinkedHashMap<>();
+            ctx.put("employee_name",                   employeeName);
+            ctx.put("analysis_year",                   year);
+            ctx.put("today",                           LocalDate.now().toString());
+            ctx.put("entitlement_days",                analysis.entitlement());
+            ctx.put("consumed_days",                   consumed);
+            ctx.put("remaining_days",                  analysis.remaining());
+            ctx.put("utilization_pct",                 analysis.utilizationPct());
+            ctx.put("avg_days_per_month",              analysis.avgPerMonth());
+            ctx.put("longest_streak_days",             analysis.longestStreak());
+            ctx.put("by_month",                        byMonth);
+            ctx.put("by_type",                         byType);
+            ctx.put("by_month_by_type",                byMonthByType);
+            Map<String, Double> byYear = new LinkedHashMap<>();
+            byYear.put(String.valueOf(year), analysis.entitlement());
+            ctx.put("by_year",                         byYear);
+            ctx.put("leave_records",                   recordMaps);
+            ctx.put("total_records_shown",             recordMaps.size());
+            ctx.put("is_range_query",                  true);
+            ctx.put("total_all_leave_types_in_range",  rangeAllTypesTotal);
+            ctx.put("range_start_month",               startMonth);
+            ctx.put("range_start_month_name",          java.time.Month.of(startMonth)
+                    .getDisplayName(TextStyle.FULL, Locale.ENGLISH));
+            ctx.put("range_end_month",                 endMonth);
+            ctx.put("range_end_month_name",            java.time.Month.of(endMonth)
+                    .getDisplayName(TextStyle.FULL, Locale.ENGLISH));
+
+            try { return mapper.writeValueAsString(ctx); } catch (Exception e) { return "{}"; }
+
+        } else if (startMonth != null) {
+            // ── SINGLE-MONTH PATH: existing logic preserved exactly ──
+            final int rm = startMonth;
             Map<Integer, Double> filteredByMonth = new LinkedHashMap<>();
-            filteredByMonth.put(requestedMonth, byMonth.containsKey(requestedMonth) ? byMonth.get(requestedMonth) : 0.0);
+            filteredByMonth.put(rm, byMonth.containsKey(rm) ? byMonth.get(rm) : 0.0);
             byMonth = filteredByMonth;
-            final int rm = requestedMonth;
+
+            LocalDate monthStart = LocalDate.of(year, rm, 1);
+            LocalDate monthEnd   = monthStart.withDayOfMonth(monthStart.lengthOfMonth());
             Map<String, Double> filteredByType = new LinkedHashMap<>();
             for (LeaveRecord r : empRecords) {
-                if (r.startDate().getMonthValue() == rm || r.endDate().getMonthValue() == rm) {
+                LocalDate oStart = r.startDate().isBefore(monthStart) ? monthStart : r.startDate();
+                LocalDate oEnd   = r.endDate().isAfter(monthEnd)      ? monthEnd   : r.endDate();
+                if (oStart.isAfter(oEnd)) continue;
+                long totalWd   = countWorkingDays(r.startDate(), r.endDate());
+                long overlapWd = countWorkingDays(oStart, oEnd);
+                double share = totalWd > 0 ? r.days() * ((double) overlapWd / totalWd) : 0.0;
+                if (share > 0) {
                     Double existing = filteredByType.get(r.leaveType());
-                    filteredByType.put(r.leaveType(), (existing != null ? existing : 0.0) + r.days());
+                    filteredByType.put(r.leaveType(), (existing != null ? existing : 0.0) + share);
                 }
             }
             byType = filteredByType;
-        }
 
-        // When a specific month was requested, only include records that overlap that month.
-        // This keeps leave_records consistent with the already-filtered by_month/by_type.
-        List<LeaveRecord> recordsForContext = empRecords;
-        if (requestedMonth != null) {
-            final int rm = requestedMonth;
             recordsForContext = new ArrayList<>();
             for (LeaveRecord r : empRecords) {
-                if (r.startDate().getMonthValue() == rm || r.endDate().getMonthValue() == rm) {
+                if (!r.endDate().isBefore(monthStart) && !r.startDate().isAfter(monthEnd)) {
                     recordsForContext.add(r);
                 }
             }
         }
 
+        // ── FULL-YEAR PATH and SINGLE-MONTH PATH share the same context serialisation ──
         List<Map<String, Object>> recordMaps = new ArrayList<>();
         for (LeaveRecord r : recordsForContext) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -239,8 +370,11 @@ public class HolidayAgent {
         ctx.put("by_year",             byYear);
         ctx.put("leave_records",       recordMaps);
         ctx.put("total_records_shown", recordMaps.size());
-        if (requestedMonth != null) {
-            ctx.put("days_in_requested_month", byMonth.containsKey(requestedMonth) ? byMonth.get(requestedMonth) : 0.0);
+        if (startMonth != null) {
+            ctx.put("total_all_leave_types_in_month", byMonth.containsKey(startMonth) ? byMonth.get(startMonth) : 0.0);
+            ctx.put("context_scope_month",            startMonth);
+            ctx.put("context_scope_month_name",       java.time.Month.of(startMonth)
+                    .getDisplayName(TextStyle.FULL, Locale.ENGLISH));
         }
 
         try { return mapper.writeValueAsString(ctx); } catch (Exception e) { return "{}"; }
@@ -294,6 +428,31 @@ public class HolidayAgent {
         Matcher m = MONTH_PATTERN.matcher(question.toLowerCase());
         if (!m.find()) return null;
         return parseMonthName(m.group(1));
+    }
+
+    /**
+     * Extracts up to two distinct month numbers from the question, in the order they appear.
+     * Used to detect range queries such as "from March to April".
+     * Preserves the original extractMonth() signature so existing callers and tests are unaffected.
+     */
+    private List<Integer> extractMonths(String question) {
+        Matcher m = MONTH_PATTERN.matcher(question.toLowerCase());
+        List<Integer> found = new ArrayList<>();
+        while (m.find()) {
+            int month = parseMonthName(m.group(1));
+            if (month > 0 && !found.contains(month)) found.add(month);
+            if (found.size() == 2) break;
+        }
+        return found;
+    }
+
+    /** Counts Mon–Fri days in the inclusive range [start, end]. */
+    private long countWorkingDays(LocalDate start, LocalDate end) {
+        long count = 0;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            if (d.getDayOfWeek().getValue() <= 5) count++;
+        }
+        return count;
     }
 
     private int parseMonthName(String name) {

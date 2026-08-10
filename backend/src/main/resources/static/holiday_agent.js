@@ -365,14 +365,34 @@
             ? messagesEl.getAttribute("data-login-username")
             : null) || employees[0] || "me";
         const templates = [
-            "How many days has {name} taken in {year}?",
+            // ── Full-year (Rule 5) ────────────────────────────────────────────
             "Show leave summary for {name} in {year}",
+            "How many leave days does {name} have in {year}?",
             "What is {name}'s remaining leave for {year}?",
-            "How many vacations of type PC for {name}?",
-            "How many days did {name} take in March {year}?",
+            "What is {name}'s leave utilization rate in {year}?",
+            "Break down {name}'s leave types for {year}",
             "What is {name}'s longest leave streak in {year}?",
-            "Generate leave report for {name} in {year}",
+            // ── Single-month generic (Rule 3) ─────────────────────────────────
+            "How many leave days does {name} have in March {year}?",
+            "How many days did {name} take in April {year}?",
+            // ── Single-month type-specific (Rule 4) ───────────────────────────
+            "How many V leave days does {name} have in March {year}?",
+            "How many PC leave days does {name} have in April {year}?",
+            "How many Public Holiday days does {name} have in January {year}?",
+            // ── Date query ────────────────────────────────────────────────────
+            "Who is on leave on 15 March {year}?",
+            // ── Range generic (Rule 1) ────────────────────────────────────────
+            "How many days does {name} have from January to March {year}?",
+            "How many leave days does {name} have from April to June {year}?",
+            // ── Range type-specific (Rule 2) ──────────────────────────────────
+            "How many V leave days does {name} have from January to March {year}?",
+            "How many PC leave days does {name} have from January to June {year}?",
+            "How many Public Holiday days does {name} have from January to March {year}?",
+            // ── All-employees ─────────────────────────────────────────────────
             "Which employees have the most leave in {year}?",
+            "Show all employees' leave totals for {year}",
+            // ── Actions ───────────────────────────────────────────────────────
+            "Generate leave report for {name} in {year}",
             "Add vacation for {name}",
             "Delete vacation for {name}",
         ];

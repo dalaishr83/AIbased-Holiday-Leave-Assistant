@@ -142,6 +142,26 @@ public class ChatController {
         return ResponseEntity.ok(r);
     }
 
+    /** Debug endpoint: returns the raw context JSON for a question without calling the LLM.
+     *  Also returns the current conversation history so poisoning can be diagnosed.
+     *  Usage: POST /api/debug/context  body: {"message":"How many leaves does Dayananda have from January to March?"} */
+    @PostMapping("/debug/context")
+    public ResponseEntity<Map<String, Object>> debugContext(@RequestBody Map<String, String> body) {
+        try {
+            String message = body.getOrDefault("message", "");
+            List<LeaveRecord> allRecords = loadMasterRecords();
+            String contextJson = agent.buildContext(message, allRecords);
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("question", message);
+            r.put("context_json", contextJson);
+            r.put("history_size", appState.getConversationHistory().size());
+            r.put("history", appState.getConversationHistory());
+            return ResponseEntity.ok(r);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(err("Debug error: " + e.getMessage()));
+        }
+    }
+
     private ResponseEntity<Map<String, Object>> handleAddWizard(
             PendingVacation pending, String message, String sessionId,
             List<LeaveRecord> allRecords, List<String> employeeNames,
@@ -165,20 +185,32 @@ public class ChatController {
                 pending.getDays(), pending.getLeaveType(), pending.getReason());
             String workingPath = getWorkingPath(record.year());
             ensureWorkingCopy(workingPath, record.year());
-            int cells = writer.addVacation(workingPath, record, vtype);
-            // Eager cache eviction — master not yet updated by sync-daemon but evicting
-            // now ensures the next read re-parses from disk (consistent with master).
-            reader.evict(getMasterPath(record.year()));
-            String actingUser = (String) session.getAttribute("username");
-            if (actingUser == null) actingUser = "admin";
-            auditService.log("vacation_added", actingUser, record.employeeName(),
-                "Added " + record.days() + "d [" + record.leaveType() + "] via chat", "success", "chat");
-            syncService.triggerSync();
-            slackNotificationService.notifyPcVacationAdded(record, pending.getLeaveCode(), actingUser);
-            appState.removePendingVacation(sessionId);
-            return ResponseEntity.ok(reply(
-                "Vacation added for **" + record.employeeName() + "**: " + record.leaveType() +
-                " " + record.startDate().format(FMT) + " to " + record.endDate().format(FMT) + " (" + cells + " days).", "text"));
+            try {
+                int cells = writer.addVacation(workingPath, record, vtype);
+                // Eager cache eviction — master not yet updated by sync-daemon but evicting
+                // now ensures the next read re-parses from disk (consistent with master).
+                reader.evict(getMasterPath(record.year()));
+                String actingUser = (String) session.getAttribute("username");
+                if (actingUser == null) actingUser = "admin";
+                auditService.log("vacation_added", actingUser, record.employeeName(),
+                    "Added " + record.days() + "d [" + record.leaveType() + "] via chat", "success", "chat");
+                syncService.triggerSync();
+                slackNotificationService.notifyPcVacationAdded(record, pending.getLeaveCode(), actingUser);
+                appState.removePendingVacation(sessionId);
+                return ResponseEntity.ok(reply(
+                    "Vacation added for **" + record.employeeName() + "**: " + record.leaveType() +
+                    " " + record.startDate().format(FMT) + " to " + record.endDate().format(FMT) + " (" + cells + " days).", "text"));
+            } catch (WorkingExcelWriter.ExcelWriteConflictException e) {
+                String actingUser = (String) session.getAttribute("username");
+                if (actingUser == null) actingUser = "admin";
+                auditService.log("vacation_conflict", actingUser, record.employeeName(),
+                    e.getMessage(), "error", "chat");
+                appState.removePendingVacation(sessionId);
+                return ResponseEntity.ok(reply(
+                    "Could not add vacation: **" + record.employeeName() + "** already has leave scheduled on **"
+                    + e.getConflictDate().format(FMT) + "** (code: " + e.getExistingCode() + "). "
+                    + "Please choose a different date range.", "text"));
+            }
         }
         if (result.cancelled()) appState.removePendingVacation(sessionId);
         return ResponseEntity.ok(reply(result.reply(), result.type()));
