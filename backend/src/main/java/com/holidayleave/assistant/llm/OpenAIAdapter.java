@@ -85,6 +85,26 @@ public class OpenAIAdapter implements LLMService {
 "ALL-EMPLOYEES shape — used for team-wide queries:\n" +
 "  all_employees_summary — map: employee name → yearly total.\n" +
 "  total_employees, total_records, analysis_year, today.\n\n" +
+"DATE-QUERY shape — used when the question asks who is on leave on a specific date:\n" +
+"  query_type                   : always \"date_query\".\n" +
+"  query_date                   : the requested date in YYYY-MM-DD format.\n" +
+"  query_date_display           : the requested date in human-readable form (e.g. \"2 March 2026\").\n" +
+"  today                        : today's date (YYYY-MM-DD).\n" +
+"  employees_on_leave           : array of employees whose leave covers query_date. Each entry:\n" +
+"      employee_name : employee's full name.\n" +
+"      leave_type    : leave type code (P, PC, V, H, E, O).\n" +
+"      start_date    : leave span start date.\n" +
+"      end_date      : leave span end date.\n" +
+"      days          : number of leave days in that span.\n" +
+"      reason        : reason text, or null.\n" +
+"  employees_on_leave_count     : number of employees on leave on that date.\n" +
+"  total_employees_checked      : total number of distinct employees in the data for that year.\n" +
+"  employees_not_on_leave_count : total_employees_checked minus employees_on_leave_count.\n\n" +
+"When query_type is \"date_query\":\n" +
+"  - If employees_on_leave_count is 0: say no employees are on leave on that date.\n" +
+"  - Otherwise: list every employee from employees_on_leave with their leave type.\n" +
+"  - Do NOT invent employees or dates not present in employees_on_leave.\n" +
+"  - Do NOT say the information is unavailable — the context IS the complete answer.\n\n" +
 "GENERIC shape — used when no specific employee was identified:\n" +
 "  employees (list), available_years, total_employees, analysis_year, today.\n" +
 "  Contains no leave figures — do not invent any.\n\n" +
@@ -169,6 +189,13 @@ public class OpenAIAdapter implements LLMService {
 "A: [Employee] had no PC leave from [StartMonth] to [EndMonth].\n\n" +
 "Q: How many leave days does [Employee] have this year?\n" +
 "A: [Employee] has N leave days this year.\n\n" +
+"Q: Who is on leave on [Date]?\n" +
+"   context: query_type=date_query, query_date_display=[Date],\n" +
+"   employees_on_leave=[{employee_name:Alice,leave_type:V,...},{employee_name:Bob,leave_type:P,...}]\n" +
+"A: Alice (Vacation) and Bob (Public Holiday) are on leave on [Date].\n\n" +
+"Q: Who is on leave on [Date]?\n" +
+"   context: query_type=date_query, employees_on_leave=[] (empty)\n" +
+"A: No employees are on leave on [Date].\n\n" +
 
 "=== LANGUAGE ===\n" +
 "Respond in the same language the user writes in.\n\n" +

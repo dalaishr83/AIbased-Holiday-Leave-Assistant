@@ -740,6 +740,140 @@ class HolidayAgentTest {
 
 
 
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // extractSpecificDate() — date parsing
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Test
+    void extractSpecificDate_ddMonthYyyy_parsed() {
+        LocalDate d = agent.extractSpecificDate("Who is on leave on 02 March 2026?", 2026);
+        assertEquals(LocalDate.of(2026, 3, 2), d);
+    }
+
+    @Test
+    void extractSpecificDate_MonthDdCommaYyyy_parsed() {
+        LocalDate d = agent.extractSpecificDate("Who has leave on March 2, 2026?", 2026);
+        assertEquals(LocalDate.of(2026, 3, 2), d);
+    }
+
+    @Test
+    void extractSpecificDate_MonthDdOrdinalYear_parsed() {
+        LocalDate d = agent.extractSpecificDate("Who will be on leave on March 2nd 2026?", 2026);
+        assertEquals(LocalDate.of(2026, 3, 2), d);
+    }
+
+    @Test
+    void extractSpecificDate_isoFormat_parsed() {
+        LocalDate d = agent.extractSpecificDate("leave on 2026-03-02", 2026);
+        assertEquals(LocalDate.of(2026, 3, 2), d);
+    }
+
+    @Test
+    void extractSpecificDate_ddSlashMmSlashYyyy_parsed() {
+        LocalDate d = agent.extractSpecificDate("off on 02/03/2026", 2026);
+        assertEquals(LocalDate.of(2026, 3, 2), d);
+    }
+
+    @Test
+    void extractSpecificDate_noDate_returnsNull() {
+        LocalDate d = agent.extractSpecificDate("How many days does Alice have in March?", 2026);
+        assertNull(d);
+    }
+
+    @Test
+    void extractSpecificDate_yearOmitted_usesFallback() {
+        LocalDate d = agent.extractSpecificDate("Who is on leave on 02 March?", 2026);
+        assertEquals(LocalDate.of(2026, 3, 2), d);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // buildContextForDate() — date-query context shape
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Test
+    void buildContextForDate_matchingEmployee_includedInOnLeave() {
+        // Carol is on leave 2026-03-02 to 2026-03-06
+        String ctx = agent.buildContextForDate(records, LocalDate.of(2026, 3, 2));
+        assertTrue(ctx.contains("\"query_type\":\"date_query\""),  "must flag date_query");
+        assertTrue(ctx.contains("\"query_date\":\"2026-03-02\""),  "must echo query_date");
+        assertTrue(ctx.contains("Carol Nguyen"),                   "Carol must appear in on_leave");
+        assertFalse(ctx.contains("Alice Smith"),                   "Alice not on leave on 02 Mar");
+        assertFalse(ctx.contains("Bob Johnson"),                   "Bob not on leave on 02 Mar");
+    }
+
+    @Test
+    void buildContextForDate_noMatchingEmployee_emptyOnLeave() {
+        String ctx = agent.buildContextForDate(records, LocalDate.of(2026, 4, 1));
+        assertTrue(ctx.contains("\"employees_on_leave_count\":0"));
+    }
+
+    @Test
+    void buildContextForDate_typeAExcluded() {
+        List<LeaveRecord> withA = new ArrayList<>(records);
+        withA.add(new LeaveRecord("Dave A", LocalDate.of(2026, 3, 2), LocalDate.of(2026, 3, 2), 0, "A", null));
+        String ctx = agent.buildContextForDate(withA, LocalDate.of(2026, 3, 2));
+        assertFalse(ctx.contains("Dave A"), "type-A records must not appear in on_leave");
+    }
+
+    @Test
+    void buildContextForDate_boundaryStartDate_included() {
+        String ctx = agent.buildContextForDate(records, LocalDate.of(2026, 3, 2));
+        assertTrue(ctx.contains("Carol Nguyen"));
+    }
+
+    @Test
+    void buildContextForDate_boundaryEndDate_included() {
+        String ctx = agent.buildContextForDate(records, LocalDate.of(2026, 3, 6));
+        assertTrue(ctx.contains("Carol Nguyen"));
+    }
+
+    @Test
+    void buildContextForDate_dayAfterSpanEnd_notIncluded() {
+        String ctx = agent.buildContextForDate(records, LocalDate.of(2026, 3, 7));
+        assertFalse(ctx.contains("Carol Nguyen"));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ask() — date query routes to date context (no analysisService call)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Test
+    void ask_dateQuery_routesToDateContext_noAnalysisServiceCall() {
+        when(appState.getConversationHistory()).thenReturn(Collections.emptyList());
+        when(llmService.ask(isNull(), anyString(), anyString(), anyList()))
+                .thenReturn("Carol Nguyen is on leave.");
+
+        agent.ask("Who is on leave on 02 March 2026?", records);
+
+        verify(llmService).ask(isNull(),
+                argThat(ctx -> ctx.contains("\"query_type\":\"date_query\"")
+                             && ctx.contains("Carol Nguyen")
+                             && ctx.contains("\"query_date\":\"2026-03-02\"")),
+                anyString(), anyList());
+        verify(analysisService, never()).analyse(anyList(), anyString(), anyInt());
+    }
+
+    @Test
+    void ask_dateQuery_semanticVariants_allRouteToDateContext() {
+        String[] variants = {
+            "Who is on leave on 02 March 2026?",
+            "Who will be on leave on March 2nd 2026?",
+            "Who has leave on March 2, 2026?",
+            "Are any employees on vacation on 2026-03-02?",
+        };
+        for (String q : variants) {
+            when(appState.getConversationHistory()).thenReturn(Collections.emptyList());
+            when(llmService.ask(isNull(), anyString(), anyString(), anyList()))
+                    .thenReturn("Carol Nguyen is on leave.");
+            agent.ask(q, records);
+        }
+        verify(llmService, atLeastOnce()).ask(isNull(),
+                argThat(ctx -> ctx.contains("\"query_type\":\"date_query\"")),
+                anyString(), anyList());
+    }
+
+
     // â”€â”€ Stub helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private com.holidayleave.assistant.model.LeaveAnalysisResult stubAnalysisResult(

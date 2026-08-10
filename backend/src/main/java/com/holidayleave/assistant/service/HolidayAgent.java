@@ -59,6 +59,35 @@ public class HolidayAgent {
     );
     private static final Pattern YEAR_PATTERN = Pattern.compile("\\b(20\\d{2})\\b");
 
+    // ── Date-query detection ──────────────────────────────────────────────────
+    // Matches patterns such as: "15 March 2026", "March 15", "03/15/2026",
+    // "2026-03-15", "March 2nd", "2nd March 2026", "March 2, 2026"
+    private static final Pattern DATE_QUERY_KEYWORDS = Pattern.compile(
+        "\\b(who is on leave|who is off|who will be|who has leave|who are on leave" +
+        "|who are off|which employees|are any|is anyone|is .+ on leave|on leave on" +
+        "|off on|vacation on|away on|absent on)\\b", Pattern.CASE_INSENSITIVE
+    );
+    // Matches a day number (with optional ordinal) paired with a month name, or numeric date formats
+    private static final Pattern SPECIFIC_DATE_PATTERN = Pattern.compile(
+        // dd Month yyyy  /  Month dd yyyy  /  Month dd, yyyy
+        "(?:(\\d{1,2})(?:st|nd|rd|th)?\\s+" +
+            "(january|february|march|april|may|june|july|august|september|october|november|december|" +
+             "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)" +
+            "(?:\\s+(20\\d{2}))?)" +
+        "|" +
+        "(?:(january|february|march|april|may|june|july|august|september|october|november|december|" +
+              "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)" +
+           "\\s+(\\d{1,2})(?:st|nd|rd|th)?" +
+           "(?:,?\\s+(20\\d{2}))?)" +
+        "|" +
+        // yyyy-mm-dd
+        "(?:(20\\d{2})-(\\d{2})-(\\d{2}))" +
+        "|" +
+        // dd/mm/yyyy  or  mm/dd/yyyy — treated as dd/mm/yyyy (European, matching regional convention)
+        "(?:(\\d{2})/(\\d{2})/(20\\d{2}))",
+        Pattern.CASE_INSENSITIVE
+    );
+
     @Autowired private LLMService llmService;
     @Autowired private LeaveAnalysisService analysisService;
     @Autowired private AppState appState;
@@ -69,6 +98,11 @@ public class HolidayAgent {
     public String buildContext(String question, List<LeaveRecord> allRecords) {
         String lower = question.toLowerCase();
         int year = extractYear(question, allRecords);
+
+        // Date-specific query ("who is on leave on 02 March 2026?") — checked before employee resolution
+        LocalDate specificDate = extractSpecificDate(question, year);
+        if (specificDate != null) return buildContextForDate(allRecords, specificDate);
+
         boolean allEmployees = isAllEmployeesQuery(lower);
         String employeeName = allEmployees ? null : resolveEmployeeName(question, allRecords);
         if (!allEmployees && employeeName == null) {
@@ -82,6 +116,16 @@ public class HolidayAgent {
     public String ask(String question, List<LeaveRecord> allRecords) {
         String lower = question.toLowerCase();
         int year = extractYear(question, allRecords);
+
+        // Date-specific query — bypass employee resolution and build a cross-employee date context
+        LocalDate specificDate = extractSpecificDate(question, year);
+        if (specificDate != null) {
+            String context = buildContextForDate(allRecords, specificDate);
+            String reply = llmService.ask(null, context, question, appState.getConversationHistory());
+            appState.addToHistory(question, reply);
+            return reply;
+        }
+
         boolean allEmployees = isAllEmployeesQuery(lower);
         String employeeName = allEmployees ? null : resolveEmployeeName(question, allRecords);
         // Pronoun reference ("she", "he", "her", "him") — primary pass returns null.
@@ -471,5 +515,89 @@ public class HolidayAgent {
             case "dec": case "december":  return 12;
             default: return 0;
         }
+    }
+
+    /**
+     * Attempts to extract a specific calendar date from the question.
+     * Supports: "02 March 2026", "March 2nd 2026", "March 2, 2026",
+     *           "2026-03-02", "02/03/2026" (dd/mm/yyyy).
+     * Returns null if no specific date is found.
+     * The fallback year is supplied by the caller (already extracted from the question or data).
+     */
+    LocalDate extractSpecificDate(String question, int fallbackYear) {
+        Matcher m = SPECIFIC_DATE_PATTERN.matcher(question);
+        if (!m.find()) return null;
+        try {
+            // Group layout (1-based):
+            // Alt 1 (dd Month [yyyy]): g1=day, g2=monthName, g3=year
+            // Alt 2 (Month dd [yyyy]): g4=monthName, g5=day, g6=year
+            // Alt 3 (yyyy-mm-dd):      g7=year, g8=month, g9=day
+            // Alt 4 (dd/mm/yyyy):      g10=day, g11=month, g12=year
+            if (m.group(1) != null) {
+                int day   = Integer.parseInt(m.group(1));
+                int month = parseMonthName(m.group(2));
+                int year  = m.group(3) != null ? Integer.parseInt(m.group(3)) : fallbackYear;
+                return LocalDate.of(year, month, day);
+            } else if (m.group(4) != null) {
+                int month = parseMonthName(m.group(4));
+                int day   = Integer.parseInt(m.group(5));
+                int year  = m.group(6) != null ? Integer.parseInt(m.group(6)) : fallbackYear;
+                return LocalDate.of(year, month, day);
+            } else if (m.group(7) != null) {
+                int year  = Integer.parseInt(m.group(7));
+                int month = Integer.parseInt(m.group(8));
+                int day   = Integer.parseInt(m.group(9));
+                return LocalDate.of(year, month, day);
+            } else if (m.group(10) != null) {
+                int day   = Integer.parseInt(m.group(10));
+                int month = Integer.parseInt(m.group(11));
+                int year  = Integer.parseInt(m.group(12));
+                return LocalDate.of(year, month, day);
+            }
+        } catch (Exception e) {
+            log.debug("extractSpecificDate: could not parse date from '{}': {}", question, e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Builds a DATE-QUERY context: scans all records and collects every employee
+     * whose leave span covers the requested date (start_date ≤ date ≤ end_date, type ≠ A).
+     * Returns a self-contained JSON context with:
+     *   query_date, employees_on_leave (array with name/leave_type/start/end/reason),
+     *   employees_not_on_leave_count, total_employees_checked.
+     */
+    String buildContextForDate(List<LeaveRecord> allRecords, LocalDate date) {
+        List<Map<String, Object>> onLeave = new ArrayList<>();
+        Set<String> allNames = new LinkedHashSet<>();
+        for (LeaveRecord r : allRecords) {
+            if (r.year() != date.getYear()) continue;
+            allNames.add(r.employeeName());
+        }
+        for (LeaveRecord r : allRecords) {
+            if (r.year() != date.getYear()) continue;
+            if ("A".equalsIgnoreCase(r.leaveType())) continue;
+            if (!r.startDate().isAfter(date) && !r.endDate().isBefore(date)) {
+                Map<String, Object> entry = new LinkedHashMap<>();
+                entry.put("employee_name", r.employeeName());
+                entry.put("leave_type",    r.leaveType());
+                entry.put("start_date",    r.startDate().toString());
+                entry.put("end_date",      r.endDate().toString());
+                entry.put("days",          r.days());
+                entry.put("reason",        r.reason());
+                onLeave.add(entry);
+            }
+        }
+        Map<String, Object> ctx = new LinkedHashMap<>();
+        ctx.put("query_type",                  "date_query");
+        ctx.put("query_date",                  date.toString());
+        ctx.put("query_date_display",          date.getDayOfMonth() + " " +
+                date.getMonth().getDisplayName(TextStyle.FULL, Locale.ENGLISH) + " " + date.getYear());
+        ctx.put("today",                       LocalDate.now().toString());
+        ctx.put("employees_on_leave",          onLeave);
+        ctx.put("employees_on_leave_count",    onLeave.size());
+        ctx.put("total_employees_checked",     allNames.size());
+        ctx.put("employees_not_on_leave_count", allNames.size() - onLeave.size());
+        try { return mapper.writeValueAsString(ctx); } catch (Exception e) { return "{}"; }
     }
 }
