@@ -18,6 +18,7 @@
     const fileInput       = document.getElementById("fileInput");
     const uploadZone      = document.getElementById("uploadZone");
     const fileList        = document.getElementById("fileList");
+    const employeeList    = document.getElementById("employeeList");
     const clearHistoryBtn = document.getElementById("clearHistoryBtn");
     const refreshBtn      = document.getElementById("refreshBtn");
     const newChatBtn      = document.getElementById("newChatBtn");
@@ -153,10 +154,24 @@
     // ── Rendering ──────────────────────────────────────────────────────────────
 
     function renderEmployees() {
-        if (!topbarSubtitle) return;
-        topbarSubtitle.textContent = employees.length > 0
-            ? "Admin — " + employees.length + " employee(s) loaded"
-            : "Admin — No file loaded";
+        if (topbarSubtitle) {
+            topbarSubtitle.textContent = employees.length > 0
+                ? "Admin — " + employees.length + " employee(s) loaded"
+                : "Admin — No file loaded";
+        }
+        if (!employeeList) return;
+        employeeList.innerHTML = "";
+        employees.forEach(function (name) {
+            var li = document.createElement("li");
+            var dot = document.createElement("span");
+            dot.className = "emp-dot";
+            li.appendChild(dot);
+            var label = document.createElement("span");
+            label.textContent = name;
+            li.appendChild(label);
+            li.title = name;
+            employeeList.appendChild(li);
+        });
     }
 
     function renderFiles(files) {
