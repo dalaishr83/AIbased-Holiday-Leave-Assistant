@@ -257,7 +257,7 @@ html, body {
   border-radius: 7px;
   padding: 7px 10px; font-size: 12px; cursor: pointer;
   color: var(--sidebar-text); text-align: left;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: normal; overflow-wrap: break-word;
   transition: background .12s, border-color .12s;
 }
 .chip:hover { background: rgba(42,91,215,.28); border-color: rgba(96,165,250,.5); }
@@ -569,6 +569,4 @@ html, body {
     padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* ── Chips: allow wrap so full question text is readable ── */
-  .chip { white-space: normal; }
 }
