@@ -1,5 +1,5 @@
 /**
- * holiday_agent.js — Holiday Leave Assistant SPA (compiled from TypeScript)
+ * holiday_agent.js — Vacation Planner Assistant SPA (compiled from TypeScript)
  * All client-side logic in a single IIFE.
  */
 (function () {
